@@ -4,6 +4,8 @@ import json
 def setup(direct_vm, direct_deploy, direct_owner, direct_alice):
     direct_vm.sender = direct_owner
     contract = direct_deploy("contracts/gainlock.py", sdk_version="v0.2.12")
+    from gltest.direct import create_address
+    direct_alice = create_address("gainlock-alice")
     network = contract.create_network("Direct Mode event network", 5, 16)
     node = contract.register_node(network, direct_alice, "Alpha event",
         "An approved batch is published.", "When a notification is published.")
@@ -14,6 +16,8 @@ def setup(direct_vm, direct_deploy, direct_owner, direct_alice):
 
 def test_sealed_root_and_replay(direct_vm, direct_deploy, direct_owner, direct_alice):
     contract, network, node = setup(direct_vm, direct_deploy, direct_owner, direct_alice)
+    from gltest.direct import create_address
+    direct_alice = create_address("gainlock-alice")
     fingerprint = contract.seal_network(network)
     assert len(fingerprint) == 64
     with direct_vm.prank(direct_alice):
@@ -27,6 +31,9 @@ def test_sealed_root_and_replay(direct_vm, direct_deploy, direct_owner, direct_a
 
 def connected(direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob):
     contract, network, node = setup(direct_vm, direct_deploy, direct_owner, direct_alice)
+    from gltest.direct import create_address
+    direct_alice = create_address("gainlock-alice")
+    direct_bob = create_address("gainlock-bob")
     other = contract.register_node(network, direct_bob, "Beta event",
         "A notification is published to the owner.",
         "Whenever an approved batch is published.")
