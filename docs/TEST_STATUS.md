@@ -1,10 +1,11 @@
 # Test and release status
 
-- Contract Python syntax: checked successfully with local Python 3.13.5.
-- Host-side `unittest` suite: 23 tests passed (local SDK stand-in; **not** official GenVM or Direct Mode).
-- The tests exercise graph arithmetic, strongly-connected-component classification, saturating upper bounds, owner/controller consent, wrong-party rejection, validator disagreement, sealing, bounded permit issue and consumption, and run closure.
-- Official GenVM compatibility/linter/Direct Mode: **not run**; relevant packages cannot be downloaded in the authoring environment (network DNS unavailable).
-- StudioNet 61999 deployment and live consensus: **not performed**; this environment does not have a funded/unlocked StudioNet wallet.
-- GitHub CI: awaits push and runner execution; do not claim green until observed.
+Verified in [GitHub Actions](https://github.com/ometere123/gainlock/actions):
 
-Important: A local stub is not an independent validator or network receipt. The release's final confidence requires live evidence and a matching-source deployment. See `DEPLOYMENT.md` and `REVIEWER_DEMO.md`.
+- **Host tests:** 23/23 pass on Python 3.12 in both Ubuntu and Windows jobs (last fully green three-job run: [43978925936](https://github.com/ometere123/gainlock/actions/runs/43978925936)).
+- **Official GenLayer Direct Mode:** 6/6 tests pass using `genlayer-test==0.29.2` / SDK v0.2.12. These include native validator replay, unit-fanout branching-cycle rejection, uncertain-fails-closed, controller rejection and forged leader/validator mismatch.
+- **GenVM linter:** pinned `genvm-linter==0.11.0`, `genvm-lint check contracts/gainlock.py` PASS in [run 43979265398](https://github.com/ometere123/gainlock/actions/runs/43979265398).
+- **CLI:** project-local `genlayer@0.39.1`; Ubuntu and Windows pipeline installation/version check. Never invoke global 0.40.0rc2.
+- **StudioNet 61999 deployment:** **NOT PERFORMED** here. This runtime has no unlocked funded wallet, so there is no verified deployed contract address, source parity, or FINALIZED+SUCCESS receipt.
+
+Direct Mode is stronger than the host stub but is **not proof of a live StudioNet consensus transaction**. The project is ready for a wallet-bearing agent to carry out the final steps in [DEPLOYMENT.md](DEPLOYMENT.md) and [REVIEWER_DEMO.md](REVIEWER_DEMO.md). Do not claim an on-chain release before those proofs exist.
