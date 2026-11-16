@@ -68,3 +68,60 @@ def test_uncertain_does_not_activate(direct_vm, direct_deploy, direct_owner,
     assert contract.assess_edge(edge) == 5
     assert contract.get_graph_analysis(network)["max_total"] == 1
     assert direct_vm.run_validator() is True
+
+
+def test_direct_unit_fanout_branching_cycle_denied(
+        direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob, direct_charlie):
+    """A->B, A->C, B->A, C->A; the last edge amplifies even though each fanout is one."""
+    from gltest.direct import create_address
+    direct_vm.sender = direct_owner
+    contract = direct_deploy("contracts/gainlock.py", sdk_version="v0.2.12")
+    network = contract.create_network("Branching unit feedback case", 6, 12)
+    people = [create_address(x) for x in ("gainlock-alice", "gainlock-bob", "gainlock-charlie")]
+    nodes = []
+    for i, controller in enumerate(people):
+        output = "A payment is approved and publicly acknowledged." if i == 0 else "A payment alert is publicly acknowledged."
+        trigger = "Whenever a payment alert is publicly acknowledged." if i == 0 else "Whenever a payment is approved and publicly acknowledged."
+        node = contract.register_node(network, controller, f"Feedback event {i}", output, trigger)
+        with direct_vm.prank(controller):
+            contract.accept_node(node, contract.get_node(node)["spec_hash"])
+        nodes.append(node)
+    direct_vm.mock_llm(r"You are verifying ONE declared trigger relationship",
+        json.dumps({"relation":"MATCH", "reason":"Exact registered event necessarily matches trigger."}))
+    statuses = []
+    for source_index, target_index in [(0,1),(0,2),(1,0),(2,0)]:
+        source, target = nodes[source_index], nodes[target_index]
+        edge = contract.propose_edge(network, source, target, 1)
+        fingerprint = contract.get_edge(edge)["proposal_hash"]
+        with direct_vm.prank(people[source_index]):
+            contract.consent_edge(edge, fingerprint)
+        with direct_vm.prank(people[target_index]):
+            contract.consent_edge(edge, fingerprint)
+        statuses.append(int(contract.assess_edge(edge)))
+    assert statuses == [2,2,2,4]
+    assert contract.get_edge(edge)["assessed_graph_kind"] == "AMPLIFYING"
+    assert contract.get_graph_analysis(network)["cycle_kind"] == "PERSISTENT"
+    assert direct_vm.run_validator() is True
+
+
+def test_direct_wrong_controller_cannot_start_run(
+        direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob):
+    from gltest.direct import create_address
+    contract, network, node = setup(direct_vm, direct_deploy, direct_owner, direct_alice)
+    contract.seal_network(network)
+    with direct_vm.prank(create_address("gainlock-bob")):
+        with direct_vm.expect_revert("only root controller"):
+            contract.start_run(network, node)
+
+
+def test_direct_validator_detects_fabricated_semantic_match(
+        direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob):
+    contract, network, edge = connected(direct_vm, direct_deploy,
+        direct_owner, direct_alice, direct_bob)
+    direct_vm.mock_llm(r"You are verifying ONE declared trigger relationship",
+        json.dumps({"relation":"MATCH", "reason":"leader claims match"}))
+    assert contract.assess_edge(edge) == 2
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r"You are verifying ONE declared trigger relationship",
+        json.dumps({"relation":"NO_MATCH", "reason":"validator rejects the entailment"}))
+    assert direct_vm.run_validator() is False
