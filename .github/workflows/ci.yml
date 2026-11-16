@@ -24,7 +24,7 @@ jobs:
       - name: Run host protocol/adversarial tests
         run: python -m unittest discover -s tests -v
       - name: Install project-pinned GenLayer CLI
-        run: npm install --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Confirm pinned stable CLI version
         run: node -e "const p=require('./node_modules/genlayer/package.json'); if(p.version!=='0.39.1')process.exit(1); console.log(p.version);"
       # Do not run StudioNet network checks in CI: no wallet or live credentials.

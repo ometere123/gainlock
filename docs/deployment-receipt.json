@@ -1,0 +1,54 @@
+{
+  "rpc": "https://studio.genlayer.com/api",
+  "chainId": "0xf22f",
+  "hash": "0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418",
+  "sourceCommit": "0df7bca72c04b8349284323fb61742e164f71055",
+  "status": "FINALIZED",
+  "consensus": "MAJORITY_AGREE",
+  "execution": "SUCCESS",
+  "executionError": null,
+  "candidateAddress": "0xD232F889687DBa1128CB03DA1B7bcE157717f226",
+  "verifiedAddress": "0xD232F889687DBa1128CB03DA1B7bcE157717f226",
+  "source": {
+    "transactionPayloadSha256": "288f47a975bc859ee1ff7a3ba30a81e916ebb2240ab60bfe549f3fbc27e06475",
+    "committedSha256": "288f47a975bc859ee1ff7a3ba30a81e916ebb2240ab60bfe549f3fbc27e06475",
+    "bytes": 25278,
+    "exactMatch": true,
+    "liveSha256": "288f47a975bc859ee1ff7a3ba30a81e916ebb2240ab60bfe549f3fbc27e06475",
+    "liveMatch": true
+  },
+  "explorer": "https://explorer-studio.genlayer.com/tx/0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418",
+  "receipt": {
+    "transactionHash": "0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418",
+    "transactionIndex": "0x0",
+    "blockHash": "0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418",
+    "blockNumber": "0x0",
+    "from": "0x0d5540e0aD4B92Aa0ad4e5F1b8cD645ee1E363E7",
+    "to": "0xD232F889687DBa1128CB03DA1B7bcE157717f226",
+    "cumulativeGasUsed": "0x7a1200",
+    "gasUsed": "0x7a1200",
+    "effectiveGasPrice": "0x0",
+    "type": "0x0",
+    "contractAddress": null,
+    "logs": [
+      {
+        "address": "0xD232F889687DBa1128CB03DA1B7bcE157717f226",
+        "topics": [
+          "0xdab9102861c7483a187584d6371d88316f005af507982ccf95c110879f3ed5a5",
+          "0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418",
+          "0x000000000000000000000000D232F889687DBa1128CB03DA1B7bcE157717f226",
+          "0x0000000000000000000000000d5540e0aD4B92Aa0ad4e5F1b8cD645ee1E363E7"
+        ],
+        "data": "0x",
+        "blockNumber": 0,
+        "transactionHash": "0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418",
+        "transactionIndex": 0,
+        "blockHash": "0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418",
+        "logIndex": 0,
+        "removed": false
+      }
+    ],
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "status": "0x1"
+  }
+}

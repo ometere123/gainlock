@@ -22,6 +22,6 @@ The contract does not monitor unregistered real-world side effects. Its safety t
 - Review: `docs/REVIEWER_DEMO.md`
 - Tests: `python -m unittest discover -s tests -v`
 - Chain: stable StudioNet 61999 only; project-local CLI pin 0.39.1
-- Live deployment evidence: `docs/LIVE_EVIDENCE.md` (pending until independently observed)
+- [StudioNet deployment and acceptance status](docs/LIVE_EVIDENCE.md)
 
 No claim of deployed consensus, a source-parity receipt, or any specific GLP score is made without evidence.

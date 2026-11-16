@@ -15,9 +15,12 @@
 
 ## Windows PowerShell
 
+See [live evidence](LIVE_EVIDENCE.md) for the submitted transaction and source
+hash. Recheck that transaction before considering another deployment.
+
 ```powershell
 cd gainlock
-npm install --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 python -m unittest discover -s tests -v
 npm run network:studionet
 npm run verify:studionet
@@ -29,7 +32,7 @@ npm run deploy:studionet
 
 ```bash
 cd gainlock
-npm install --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 python -m unittest discover -s tests -v
 npm run network:studionet
 npm run verify:studionet

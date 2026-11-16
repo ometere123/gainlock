@@ -142,6 +142,6 @@ Deploying requires a locally configured/unlocked funded StudioNet wallet. If the
 ## Current verification state
 
 - Python syntax and dependency-free host-mode protocol/adversarial tests: **run locally for this release**; see the run evidence in `docs/TEST_STATUS.md`.
-- **Official GenLayer Direct Mode:** 6 tests passed in GitHub Actions with real SDK validator replay; **GenVM linter 0.11.0:** `genvm-lint check` passed. See [`docs/TEST_STATUS.md`](docs/TEST_STATUS.md) for recorded CI evidence. **Live multi-validator StudioNet consensus and deployment remain pending** because this environment has no unlocked funded wallet. No on-chain address or finalized transaction is claimed.
+- **Official GenLayer Direct Mode:** 6 tests passed in GitHub Actions with SDK validator replay. **GenVM linter 0.11.0:** `genvm-lint check` passed. See [test status](docs/TEST_STATUS.md) and the [StudioNet deployment and acceptance ledger](docs/LIVE_EVIDENCE.md).
 
 The repository contains no frontend because this is a standalone Intelligent Contract primitive. It should be submitted under **Intelligent Contracts**, not Projects.

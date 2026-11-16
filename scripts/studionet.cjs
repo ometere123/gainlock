@@ -12,7 +12,15 @@ const expectedId = '61999';
 function fail(message) { console.error('GAINLOCK NETWORK GUARD: ' + message); process.exit(1); }
 if (!fs.existsSync(cmd)) fail('Project-local CLI not installed. Run npm install in repository first.');
 function run(args) {
-  return cp.execFileSync(cmd, args, {cwd: root, encoding: 'utf8', stdio: ['inherit', 'pipe', 'pipe']}).trim();
+  return invoke(args, ['inherit', 'pipe', 'pipe']).trim();
+}
+function invoke(args, stdio) {
+  const options = {cwd: root, encoding: 'utf8', stdio};
+  if (process.platform === 'win32') {
+    const entry = path.join(root, 'node_modules', 'genlayer', 'dist', 'index.js');
+    return cp.execFileSync(process.execPath, [entry, ...args], options);
+  }
+  return cp.execFileSync(cmd, args, options);
 }
 let version;
 try { version = run(['--version']); } catch (e) { fail('Unable to inspect local CLI version: ' + (e.stderr || e.message)); }
@@ -34,10 +42,22 @@ if (!normalized.includes(expectedAlias) || !normalized.includes(expectedRpc) ||
     !info.includes(expectedId) || normalized.includes('studio-dev') || info.includes('61997')) {
   fail(`Expected alias ${expectedAlias}, chain ${expectedId}, RPC ${expectedRpc}. Refusing operation.`);
 }
-console.log('GAINLOCK GUARD PASS: stable StudioNet only (61999).');
-if (mode === '--deploy') {
-  console.log('Deploying GainLock on stable StudioNet. Wallet and balance must be configured locally.');
-  try {
-    cp.execFileSync(cmd, ['deploy', '--contract', 'contracts/gainlock.py'], {cwd: root, stdio: 'inherit'});
-  } catch (e) { fail('Deployment command failed. Check wallet/funding/network; do not infer any successful transaction.'); }
+async function verifyRpc() {
+  const response = await fetch(expectedRpc, {
+    method: 'POST',
+    headers: {'content-type': 'application/json'},
+    body: JSON.stringify({jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: []}),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(`RPC HTTP ${response.status}`);
+  const body = await response.json();
+  if (body.error || body.result !== '0xf22f') throw new Error(`Unexpected eth_chainId: ${JSON.stringify(body)}`);
+  console.log('GAINLOCK GUARD PASS: stable StudioNet only (61999), live eth_chainId=0xf22f.');
+  if (mode === '--deploy') {
+    console.log('Deploying GainLock on stable StudioNet. Wallet and balance must be configured locally.');
+    try {
+      invoke(['deploy', '--contract', 'contracts/gainlock.py'], 'inherit');
+    } catch (e) { fail('Deployment command failed. Check wallet/funding/network; do not infer any successful transaction.'); }
+  }
 }
+verifyRpc().catch(e => fail(e.message));

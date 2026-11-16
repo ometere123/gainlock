@@ -1,24 +1,31 @@
-# StudioNet live evidence — PENDING
+# GainLock StudioNet evidence
 
-No on-chain transactions have been executed by the authoring environment; no contract address, source hash parity, successful consensus outcome or explorer receipt is yet claimed.
+Release status **deployment verified; live acceptance evidence in progress**.
 
-Populate after actual deployment:
+- Network `studionet`, chain `61999` (`eth_chainId = 0xf22f`), RPC `https://studio.genlayer.com/api`, project-local CLI `0.39.1`.
+- Source commit `0df7bca72c04b8349284323fb61742e164f71055`.
+- Deployment transaction [0x818aa5a8…bf07418](https://explorer-studio.genlayer.com/tx/0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418).
+- Recorded RPC status `FINALIZED`, consensus `MAJORITY_AGREE`, leader execution `SUCCESS`.
+- Contract address [0xD232…7f226](https://explorer-studio.genlayer.com/address/0xD232F889687DBa1128CB03DA1B7bcE157717f226).
+- The 25,278-byte transaction payload and source returned by `gen_getContractCode` exactly match the committed source. SHA-256 `288f47a975bc859ee1ff7a3ba30a81e916ebb2240ab60bfe549f3fbc27e06475`.
 
-| Item | Value |
+The [RPC snapshot](deployment-receipt.json) includes the Ethereum-compatible receipt. Its `0x1` status alone does not establish GenLayer finality or successful execution.
+
+| Live acceptance scenario | Status |
 | --- | --- |
-| Network alias | studionet |
-| Chain | 61999 |
-| RPC | https://studio.genlayer.com/api |
-| CLI | 0.39.1 (project-local) |
-| Git commit | PENDING |
-| Local contract SHA-256 | PENDING |
-| Deployed contract SHA-256 | PENDING |
-| Contract address | PENDING |
-| Deployment hash, receipt, explorer | PENDING |
-| Honest DAG flow | PENDING |
-| Persistent cycle flow | PENDING |
-| Rejected amplifying graph flow | PENDING |
-| Semantic disagreement flow | PENDING |
-| Consent and replay denial flow | PENDING |
+| Safe acyclic chain | Pending |
+| Bounded persistent cycle | Pending |
+| Unit-fanout branching amplification rejection | Pending |
+| Ambiguous semantic trigger rejection | Pending |
+| Unauthorized permit rejection | Pending |
+| Permit replay rejection | Pending |
 
-All successful cases must have explicit `FINALIZED + SUCCESS` receipts. Cite real explorer URLs and show decoded readbacks; never substitute wallet submissions, fabricated evidence or screenshots alone.
+Recheck the existing transaction without a signer before running the demo:
+
+```sh
+node scripts/verify-deployment.mjs 0x818aa5a81c8e4163cad645c7713d0b9abece57018cd39badad4467432bf07418 0df7bca72c04b8349284323fb61742e164f71055
+```
+
+The verifier exits successfully when the GenLayer receipt is finalized with
+leader execution `SUCCESS` and the source at the resulting address matches
+the committed bytes. Once verified, use the [reviewer procedure](REVIEWER_DEMO.md).
