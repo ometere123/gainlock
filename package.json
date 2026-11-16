@@ -1,0 +1,14 @@
+{
+  "name": "gainlock",
+  "private": true,
+  "version": "1.0.0",
+  "description": "GenLayer standalone semantic feedback amplification limiter",
+  "engines": {"node": ">=18"},
+  "devDependencies": {"genlayer": "0.39.1"},
+  "scripts": {
+    "test:host": "python -m unittest discover -s tests -v",
+    "network:studionet": "node scripts/studionet.cjs --select",
+    "verify:studionet": "node scripts/studionet.cjs --check",
+    "deploy:studionet": "node scripts/studionet.cjs --deploy"
+  }
+}

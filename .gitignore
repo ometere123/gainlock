@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+dist/
+build/
+*.log
+coverage/
+live-credentials/

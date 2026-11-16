@@ -1,0 +1,31 @@
+name: Tests and pinned tooling
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  host-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Python contract compiles
+        run: python -m py_compile contracts/gainlock.py
+      - name: Run host protocol/adversarial tests
+        run: python -m unittest discover -s tests -v
+      - name: Install project-pinned GenLayer CLI
+        run: npm install --no-audit --no-fund
+      - name: Confirm pinned stable CLI version
+        run: node -e "const p=require('./node_modules/genlayer/package.json'); if(p.version!=='0.39.1')process.exit(1); console.log(p.version);"
+      # Do not run StudioNet network checks in CI: no wallet or live credentials.
+      # Official Direct Mode/GenVM tests require the matching SDK and tools.
