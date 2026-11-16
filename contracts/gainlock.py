@@ -477,7 +477,7 @@ class GainLock(gl.Contract):
             else:
                 e.status = u8(ACTIVE)
                 n.version = u32(int(n.version) + 1)
-        EdgeAssessed.emit(edge_id, e.status)
+        EdgeAssessed(edge_id, e.status).emit()
         return e.status
 
     @gl.public.write
@@ -499,7 +499,7 @@ class GainLock(gl.Contract):
         edge_commitments = [(int(i), self._edge(i).proposal_hash) for i in n.edge_ids if self._edge(i).status == ACTIVE]
         n.graph_hash = _hash("sealed-graph", [int(network_id), int(n.max_hops), int(n.budget), node_commitments, edge_commitments])
         n.sealed = True
-        NetworkSealed.emit(network_id, n.graph_hash)
+        NetworkSealed(network_id, n.graph_hash).emit()
         return n.graph_hash
 
     @gl.public.write
@@ -524,7 +524,7 @@ class GainLock(gl.Contract):
                             permits_issued=u32(1),root_permit_id=p_id,
                             started_by=gl.message.sender_address,active=True)
         self.permits[p_id] = Permit(run_id=id,node_id=root_node,parent_id=u256(0),depth=u8(0),spent=False)
-        PermitIssued.emit(p_id,id)
+        PermitIssued(p_id,id).emit()
         return id
 
     @gl.public.write
@@ -538,7 +538,7 @@ class GainLock(gl.Contract):
         if p.spent:
             reject("permit already spent")
         p.spent = True
-        PermitSpent.emit(permit_id, p.run_id)
+        PermitSpent(permit_id, p.run_id).emit()
         return True
 
     @gl.public.write
@@ -569,7 +569,7 @@ class GainLock(gl.Contract):
         self.next_permit_id = u256(int(id) + 1)
         self.permits[id] = Permit(run_id=p.run_id,node_id=e.target,
                                   parent_id=parent_permit_id,depth=u8(int(p.depth)+1),spent=False)
-        PermitIssued.emit(id,p.run_id)
+        PermitIssued(id,p.run_id).emit()
         return id
 
     @gl.public.write
