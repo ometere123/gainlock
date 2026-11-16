@@ -21,6 +21,9 @@ class FakeTreeMap:
 
 
 class FakeEvent:
+    def __init__(self, *args, **kwargs):
+        pass
+
     @classmethod
     def emit(cls, *args, **kwargs):
         return None
