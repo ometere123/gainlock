@@ -34,8 +34,8 @@
 
 ## CI and deployment status
 
-- Final release-branch CI run [44060971598](https://github.com/ometere123/gainlock/actions/runs/44060971598)
-  passed all four required job groups for commit `f6e828f33a4476b34d4a221d216cee4d1f604b48`:
+- Final `main` CI run [44061446103](https://github.com/ometere123/gainlock/actions/runs/44061446103)
+  passed all four required job groups for commit `ddcc15be29a670548e52b76d1cbbbd7dfb025ab0`:
   Ubuntu/Windows host tests, Ubuntu official Direct Mode, and GenVM lint.
 - Corrected StudioNet deployment:
   [`0x31285A4120a5547E30561F8A8C8B9c30248dDCBF`](https://explorer-studio.genlayer.com/address/0x31285A4120a5547E30561F8A8C8B9c30248dDCBF),
