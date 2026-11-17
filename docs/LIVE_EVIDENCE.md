@@ -11,6 +11,14 @@ Release status **deployment verified; live acceptance evidence in progress**.
 
 The [RPC snapshot](deployment-receipt.json) includes the Ethereum-compatible receipt. Its `0x1` status alone does not establish GenLayer finality or successful execution.
 
+The initial live run created network 1 (`Review DAG`, six hops, budget 25) with
+finalized successful execution. Its first node registration finalized with
+execution `ERROR`, decoded as `EXPECTED: invalid label`. The demo had used
+a one-character label where the contract requires at least eight characters.
+The continuation uses compliant labels and checks that the existing network is
+empty before proceeding. The contract source and deployment remain the same.
+[Initial run log](live-review.jsonl)
+
 | Live acceptance scenario | Status |
 | --- | --- |
 | Safe acyclic chain | Pending |

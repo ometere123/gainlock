@@ -10,6 +10,7 @@ import { CalldataAddress } from 'genlayer-js/types';
 
 const rpc = 'https://studio.genlayer.com/api';
 const address = process.argv[2];
+const reuseDag = process.argv.includes('--reuse-empty-dag');
 assert.match(address ?? '', /^0x[0-9a-fA-F]{40}$/);
 async function request(method, params = []) {
   const response = await fetch(rpc, {
@@ -66,7 +67,13 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function wait(hash, requireFinal) {
   for (let i = 0; i < 120; ++i) {
     await pause(4500);
-    const t = await request('eth_getTransactionByHash', [hash]);
+    let t;
+    try {
+      t = await request('eth_getTransactionByHash', [hash]);
+    } catch (error) {
+      if (i === 119) throw error;
+      continue;
+    }
     if (t && (t.status === 'FINALIZED' || (!requireFinal && t.status === 'ACCEPTED'))) return t;
   }
   throw new Error(`Timed out waiting for ${hash}`);
@@ -75,7 +82,10 @@ function result(t) {
   const leader = t.consensus_data?.leader_receipt?.[0];
   return {status: t.status, consensus: t.result_name ?? t.result,
     execution: leader?.execution_result, error: leader?.genvm_result?.error_description
-      ?? leader?.genvm_result?.raw_error, votes: t.consensus_data?.votes};
+      ?? leader?.genvm_result?.raw_error
+      ?? (leader?.execution_result === 'ERROR' && leader.result
+        ? Buffer.from(leader.result, 'base64').subarray(1).toString('utf8') : null),
+    votes: t.consensus_data?.votes};
 }
 async function write(actor, method, args, expected = 'SUCCESS') {
   const hash = await writers.get(actor).writeContract({address, functionName: method, args, value: 0n});
@@ -97,12 +107,16 @@ const event = 'Every output is an event tagged REVIEW-DEMO with payment confirme
 const trigger = 'Trigger on every event tagged REVIEW-DEMO with payment confirmed.';
 async function network(name, hops, budget, specs) {
   const id = ++networkId;
-  await write(owner, 'create_network', [name, hops, budget]);
-  assert.equal((await read('get_network', id)).name, name);
+  if (!(reuseDag && id === 1)) await write(owner, 'create_network', [name, hops, budget]);
+  const existing = await read('get_network', id);
+  assert.equal(existing.name, name);
+  assert.equal(Number(existing.max_hops), hops);
+  assert.equal(Number(existing.budget), budget);
+  assert.deepEqual(existing.node_ids, []);
   const nodes = [];
   for (const [label, actor, output, condition] of specs) {
     const n = ++nodeId;
-    await write(owner, 'register_node', [id, addressArg(actor), label, output ?? event, condition ?? trigger]);
+    await write(owner, 'register_node', [id, addressArg(actor), 'Review node ' + label, output ?? event, condition ?? trigger]);
     const proposed = await read('get_node', n);
     await write(actor, 'accept_node', [n, proposed.spec_hash]);
     assert.equal((await read('get_node', n)).approved, true);
