@@ -214,6 +214,9 @@ class KernelTests(unittest.TestCase):
         self.assertEqual(self.m._safe_result(None)["relation"], "MODEL_ERROR")
         self.assertEqual(self.m._safe_result('{"relation":"MATCH","reason":"x","extra":1}') ["relation"], "MODEL_ERROR")
         self.assertEqual(self.m._safe_result('{"relation":"MATCH","reason":"x"}' + " " * 2001)["relation"], "MODEL_ERROR")
+        bounded = self.m._safe_result(json.dumps({"relation": "MATCH", "reason": "r" * 400}))
+        self.assertEqual(bounded["relation"], "MATCH")
+        self.assertEqual(len(bounded["reason"]), self.m.MAX_REASON)
 
     def test_reference_graph_totals_and_cycle_presence(self):
         cases = [

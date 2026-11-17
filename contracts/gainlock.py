@@ -91,9 +91,9 @@ def _safe_result(response: Any) -> dict:
     if relation not in ("MATCH", "NO_MATCH", "UNCERTAIN") or not isinstance(reason, str):
         return model_error("MALFORMED_RESULT")
     normalized_reason = " ".join(reason.split())
-    if len(normalized_reason) > MAX_REASON:
-        return model_error("OVERSIZED_REASON")
-    reason = normalized_reason
+    # The explanation is non-authoritative. Bound it for storage while keeping
+    # a structurally valid semantic classification usable for admission.
+    reason = normalized_reason[:MAX_REASON]
     return {"relation": relation, "reason": reason}
 
 

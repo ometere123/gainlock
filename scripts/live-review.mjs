@@ -15,14 +15,25 @@ if (process.argv.includes('--reuse-empty-dag')) {
   throw new Error('Refusing implicit empty-counter reuse; run against a fresh deployment or add explicit scenario IDs.');
 }
 async function request(method, params = []) {
-  const response = await fetch(rpc, {
-    method: 'POST', headers: {'content-type': 'application/json'},
-    body: JSON.stringify({jsonrpc: '2.0', id: 1, method, params}),
-    signal: AbortSignal.timeout(15000),
-  });
-  const body = await response.json();
-  if (!response.ok || body.error) throw new Error(JSON.stringify(body.error ?? response.status));
-  return body.result;
+  for (let attempt = 0; attempt < 5; ++attempt) {
+    const response = await fetch(rpc, {
+      method: 'POST', headers: {'content-type': 'application/json'},
+      body: JSON.stringify({jsonrpc: '2.0', id: 1, method, params}),
+      signal: AbortSignal.timeout(15000),
+    });
+    const raw = await response.text();
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch (_) {
+      if (attempt === 4) throw new Error(`RPC returned non-JSON response for ${method}`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      continue;
+    }
+    if (!response.ok || body.error) throw new Error(JSON.stringify(body.error ?? response.status));
+    return body.result;
+  }
+  throw new Error(`RPC retry limit reached for ${method}`);
 }
 assert.equal(await request('eth_chainId'), '0xf22f');
 assert.equal(JSON.parse(readFileSync(new URL('../node_modules/genlayer/package.json', import.meta.url))).version, '0.39.1');
