@@ -20,7 +20,7 @@ The contract does not monitor unregistered real-world side effects. Its safety t
 
 - Source: `contracts/gainlock.py`
 - Review: `docs/REVIEWER_DEMO.md`
-- Tests: `python -m unittest discover -s tests -v` (40 host tests); official Direct Mode (9 tests) uses `genlayer-test==0.29.2` and SDK v0.2.12
+- Tests: `python -m unittest discover -s tests -v` (40 host tests); official Direct Mode (9 tests) uses `genlayer-test==0.29.2` and SDK v0.2.12; final CI run [44060971598](https://github.com/ometere123/gainlock/actions/runs/44060971598) passed Ubuntu/Windows host tests, Ubuntu Direct Mode and GenVM lint
 - Chain: stable StudioNet 61999 only; project-local CLI pin 0.39.1
 - Historical V1 contract: `0xD232F889687DBa1128CB03DA1B7bcE157717f226` (unchanged historical source; not the corrected release)
 - Corrected-release deployment: [`0x31285A4120a5547E30561F8A8C8B9c30248dDCBF`](https://explorer-studio.genlayer.com/address/0x31285A4120a5547E30561F8A8C8B9c30248dDCBF),
