@@ -5,7 +5,40 @@ IDs with actual readbacks and submit each StudioNet write as a real transaction.
 The live runner waits for `FINALIZED` and then checks the leader execution
 result. A finalized expected error is recorded as a rejected operation, not as
 a successful state transition. Controlled Direct Mode evidence and live
-StudioNet evidence must remain clearly separated.
+ StudioNet evidence must remain clearly separated.
+
+## Verified final StudioNet run
+
+The corrected release is deployed at
+[`0x31285A4120a5547E30561F8A8C8B9c30248dDCBF`](https://explorer-studio.genlayer.com/address/0x31285A4120a5547E30561F8A8C8B9c30248dDCBF).
+The deployment transaction is
+[`0x230813…514f6`](https://explorer-studio.genlayer.com/tx/0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6),
+`FINALIZED` / `MAJORITY_AGREE` / `SUCCESS`, with exact committed/deployed
+source SHA-256 `43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560`.
+
+The executed live order was:
+
+1. **A — safe chain:** network 2, nodes 4→5→6, active unit-fanout edges,
+   `ACYCLIC`, root totals `[3,2,1]`, max work `3`, budget `25`.
+2. **B — persistent cycle:** network 3, nodes 7↔8, `PERSISTENT`, root totals
+   `[6,6]`, max work `6`, budget `7`; the graph was sealed and run 1 issued
+   permit 1. Permit 1→2→3 was consumed/spawned through depth 2, the run was
+   closed, and a second run received distinct IDs. Finalized expected errors
+   proved wrong-controller, spawn-before-spend, replay and closed-run checks.
+3. **C — amplification:** network 4, nodes 9/10/11, edges 5/6/7 active; edge
+   8 (`11→9`, fanout 1) reached semantic `MATCH`, then deterministic
+   `AMPLIFYING`, candidate work `13`, status `REJECTED_BUDGET=4`. The active
+   graph stayed `PERSISTENT` with root totals `[10,10,1]`.
+4. **D — semantic distinction:** network 5, nodes 12/13; the invoice-created /
+   payment-may-be-pending source and confirmed-payment target finalized as
+   `UNCERTAIN` status 5 and remained outside active adjacency. The graph readback
+   remained acyclic with totals `[1,1]`.
+
+Natural model-format recovery was also observed live: edge 2 first recorded
+`MODEL_ERROR`/`MALFORMED_RESULT`, then a later committed assessment of the same
+proposal became `ACTIVE`; the same pattern occurred on the persistent-cycle
+edges. Full hashes and readbacks are in
+[`docs/LIVE_EVIDENCE.md`](LIVE_EVIDENCE.md) and the linked JSONL ledgers.
 
 ## Case A — harmless chain
 

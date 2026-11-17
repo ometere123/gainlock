@@ -1,0 +1,54 @@
+{
+  "rpc": "https://studio.genlayer.com/api",
+  "chainId": "0xf22f",
+  "hash": "0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6",
+  "sourceCommit": "28ab4fc213d7c9022b16079553f7fd7120a1c7c9",
+  "status": "FINALIZED",
+  "consensus": "MAJORITY_AGREE",
+  "execution": "SUCCESS",
+  "executionError": null,
+  "candidateAddress": "0x31285A4120a5547E30561F8A8C8B9c30248dDCBF",
+  "verifiedAddress": "0x31285A4120a5547E30561F8A8C8B9c30248dDCBF",
+  "source": {
+    "transactionPayloadSha256": "43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560",
+    "committedSha256": "43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560",
+    "bytes": 29108,
+    "exactMatch": true,
+    "liveSha256": "43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560",
+    "liveMatch": true
+  },
+  "explorer": "https://explorer-studio.genlayer.com/tx/0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6",
+  "receipt": {
+    "transactionHash": "0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6",
+    "transactionIndex": "0x0",
+    "blockHash": "0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6",
+    "blockNumber": "0x0",
+    "from": "0x0d5540e0aD4B92Aa0ad4e5F1b8cD645ee1E363E7",
+    "to": "0x31285A4120a5547E30561F8A8C8B9c30248dDCBF",
+    "cumulativeGasUsed": "0x7a1200",
+    "gasUsed": "0x7a1200",
+    "effectiveGasPrice": "0x0",
+    "type": "0x0",
+    "contractAddress": null,
+    "logs": [
+      {
+        "address": "0x31285A4120a5547E30561F8A8C8B9c30248dDCBF",
+        "topics": [
+          "0xdab9102861c7483a187584d6371d88316f005af507982ccf95c110879f3ed5a5",
+          "0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6",
+          "0x00000000000000000000000031285A4120a5547E30561F8A8C8B9c30248dDCBF",
+          "0x0000000000000000000000000d5540e0aD4B92Aa0ad4e5F1b8cD645ee1E363E7"
+        ],
+        "data": "0x",
+        "blockNumber": 0,
+        "transactionHash": "0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6",
+        "transactionIndex": 0,
+        "blockHash": "0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6",
+        "logIndex": 0,
+        "removed": false
+      }
+    ],
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "status": "0x1"
+  }
+}

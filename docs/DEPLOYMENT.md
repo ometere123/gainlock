@@ -69,6 +69,21 @@ use it whenever more than one configured account exists.
    validator blocks a scenario, preserve the partial evidence and document the
    exact blocker instead of substituting Studio Dev or chain 61997.
 
+## Corrected release receipt
+
+The verified corrected deployment is [
+`0x31285A4120a5547E30561F8A8C8B9c30248dDCBF`
+](https://explorer-studio.genlayer.com/address/0x31285A4120a5547E30561F8A8C8B9c30248dDCBF).
+Its deployment transaction is [
+`0x230813…514f6`
+](https://explorer-studio.genlayer.com/tx/0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6),
+which is `FINALIZED`, `MAJORITY_AGREE` and leader-execution `SUCCESS`. The
+transaction payload, committed source and `gen_getContractCode` response are
+29108 bytes and have the exact SHA-256
+`43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560`.
+The historical V1 address and receipt remain separate in
+[`LIVE_EVIDENCE.md`](LIVE_EVIDENCE.md).
+
 ## Important CLI commands
 
 For the stable CLI, consult the pinned version's actual `genlayer --help`, `genlayer write --help`, `genlayer receipt --help`, `genlayer call --help`. The CLI documentation is [GenLayer CLI Reference](https://docs.genlayer.com/api-references/genlayer-cli).

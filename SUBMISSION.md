@@ -23,8 +23,20 @@ The contract does not monitor unregistered real-world side effects. Its safety t
 - Tests: `python -m unittest discover -s tests -v` (40 host tests); official Direct Mode (9 tests) uses `genlayer-test==0.29.2` and SDK v0.2.12
 - Chain: stable StudioNet 61999 only; project-local CLI pin 0.39.1
 - Historical V1 contract: `0xD232F889687DBa1128CB03DA1B7bcE157717f226` (unchanged historical source; not the corrected release)
-- Corrected-release deployment: pending the finalized StudioNet deployment gate; it will be recorded separately from V1 in [deployment and acceptance evidence](docs/LIVE_EVIDENCE.md).
+- Corrected-release deployment: [`0x31285A4120a5547E30561F8A8C8B9c30248dDCBF`](https://explorer-studio.genlayer.com/address/0x31285A4120a5547E30561F8A8C8B9c30248dDCBF),
+  deployed by transaction [`0x230813…514f6`](https://explorer-studio.genlayer.com/tx/0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6).
+  The receipt is `FINALIZED`, consensus is `MAJORITY_AGREE`, execution is
+  `SUCCESS`, and the committed/transaction/deployed source SHA-256 is
+  `43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560`.
+  Live acceptance evidence is recorded in [LIVE_EVIDENCE.md](docs/LIVE_EVIDENCE.md).
 
 The current release also separates historical IDs from active capacity: closed runs release per-network active capacity, while run and permit IDs remain unique and historical records remain readable. External services must deliberately integrate the permit protocol; GainLock does not control unregistered off-chain side effects.
 
-No claim of deployed consensus, a source-parity receipt, or any specific GLP score is made without evidence.
+The final release has 40 passing host tests, 9 passing official Ubuntu Direct
+Mode tests, 5/5 executed mutation kills, passing GenVM lint, and finalized live
+StudioNet evidence for the acyclic chain, bounded persistent cycle and permit
+lifecycle, unit-fanout amplification rejection, semantic retry recovery, and
+genuine uncertainty fail-closed behavior. Windows host tests pass; Windows
+Direct Mode remains blocked before assertions by the upstream `WinError 32`
+temporary-file cleanup defect. No claim is made that GainLock controls
+unregistered off-chain side effects.

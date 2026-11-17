@@ -169,9 +169,17 @@ Deploying requires a locally configured/unlocked funded StudioNet wallet. If the
   remain part of CI.
 - `genvm-linter==0.11.0` passes `genvm-lint check` against the pinned v0.2.12
   artifact. The ABI remains 11 public writes and 7 public views.
-- The corrected source is not associated with the historical V1 address. Live
-  deployment and acceptance evidence is added only after a separate finalized
-  StudioNet deployment and exact source-parity check. See [test status](docs/TEST_STATUS.md),
+- The corrected release is deployed separately from V1 at
+  [`0x31285A4120a5547E30561F8A8C8B9c30248dDCBF`](https://explorer-studio.genlayer.com/address/0x31285A4120a5547E30561F8A8C8B9c30248dDCBF).
+  Deployment transaction [`0x230813…514f6`](https://explorer-studio.genlayer.com/tx/0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6)
+  finalized with majority agreement and successful execution. The committed,
+  transaction-payload and deployed-source SHA-256 values are identical:
+  `43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560`.
+- Final live StudioNet evidence covers the safe chain (`ACYCLIC`, `[3,2,1]`),
+  bounded persistent cycle (`PERSISTENT`, `[6,6]`) with a real permit lifecycle,
+  the unit-fanout branching candidate rejected as `AMPLIFYING`/`REJECTED_BUDGET`
+  with candidate work `13`, and a genuine `UNCERTAIN` edge that remained inactive.
+  See [live evidence](docs/LIVE_EVIDENCE.md), [test status](docs/TEST_STATUS.md),
   [deployment instructions](docs/DEPLOYMENT.md) and the [reviewer walkthrough](docs/REVIEWER_DEMO.md).
 
 The repository contains no frontend because this is a standalone Intelligent Contract primitive. It should be submitted under **Intelligent Contracts**, not Projects.

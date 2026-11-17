@@ -77,6 +77,9 @@ const emit = value => {
   console.log(line);
 };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function pendingNonce(actor) {
+  return BigInt(await request('eth_getTransactionCount', [actor.address, 'pending']));
+}
 async function wait(hash) {
   for (let i = 0; i < 120; ++i) {
     await pause(4500);
@@ -102,7 +105,24 @@ function result(t) {
     votes: t.consensus_data?.votes};
 }
 async function write(actor, method, args, expected = 'SUCCESS') {
-  const hash = await writers.get(actor).writeContract({address, functionName: method, args, value: 0n});
+  const beforeNonce = await pendingNonce(actor);
+  let hash;
+  for (let attempt = 1; attempt <= 5; ++attempt) {
+    try {
+      hash = await writers.get(actor).writeContract({address, functionName: method, args, value: 0n});
+      break;
+    } catch (error) {
+      const afterNonce = await pendingNonce(actor).catch(() => null);
+      emit({write_error: error.message, caller: actor.address, method, attempt,
+        nonce_advanced: afterNonce === null ? null : afterNonce !== beforeNonce});
+      if (afterNonce !== null && afterNonce !== beforeNonce) {
+        throw new Error(`Broadcast status is ambiguous for ${method}; refusing a duplicate write`);
+      }
+      if (attempt === 5) throw error;
+      await pause(2000 * attempt);
+    }
+  }
+  assert.ok(hash, `No transaction hash returned for ${method}`);
   emit({submitted: hash, caller: actor.address, method, args: args.map(a => a instanceof CalldataAddress ? '0x' + Buffer.from(a.bytes).toString('hex') : a)});
   records.push({hash, method, expected});
   const observed = result(await wait(hash));

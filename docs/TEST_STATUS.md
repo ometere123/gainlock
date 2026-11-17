@@ -34,7 +34,19 @@
 
 ## CI and deployment status
 
-The release branch CI result is recorded only after the workflow for the final
-commit completes. The corrected source must receive its own finalized StudioNet
-deployment and source-parity evidence; the V1 address and V1 receipt are not
-reused for the corrected bytes.
+- Release-branch CI run [44045309959](https://github.com/ometere123/gainlock/actions/runs/44045309959)
+  passed the four required job groups for the corrected contract source:
+  Ubuntu/Windows host tests, Ubuntu official Direct Mode, and GenVM lint.
+  A final post-evidence workflow is required after the documentation/evidence
+  commit and is reported in the release report.
+- Corrected StudioNet deployment:
+  [`0x31285A4120a5547E30561F8A8C8B9c30248dDCBF`](https://explorer-studio.genlayer.com/address/0x31285A4120a5547E30561F8A8C8B9c30248dDCBF),
+  transaction [`0x230813…514f6`](https://explorer-studio.genlayer.com/tx/0x230813b21e18ef5d2d80bc55fd3e98d70987deedaae0cfc0e699d011b14514f6),
+  `FINALIZED` / `MAJORITY_AGREE` / `SUCCESS`, exact source parity SHA-256
+  `43f6c245716f55f2071f430fbdcd667dd65b2344668db9cdd562e3c3aa671560`.
+- Final live acceptance on that address recorded the safe chain, persistent
+  cycle and permit lifecycle, natural model-format recovery followed by valid
+  MATCH, mathematical branching rejection (`AMPLIFYING`, status 4, candidate
+  work 13), and a substantive UNCERTAIN edge (status 5) excluded from active
+  graph analysis. The failed provider retry and model-format variance logs are
+  preserved rather than overwritten.
