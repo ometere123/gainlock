@@ -1,6 +1,6 @@
 # GainLock StudioNet evidence
 
-Release status **deployment verified; live acceptance evidence in progress**.
+Release status **BLOCKED on live acceptance**. Deployment and source parity are verified.
 
 - Network `studionet`, chain `61999` (`eth_chainId = 0xf22f`), RPC `https://studio.genlayer.com/api`, project-local CLI `0.39.1`.
 - Source commit `0df7bca72c04b8349284323fb61742e164f71055`.
@@ -21,12 +21,18 @@ empty before proceeding. The contract source and deployment remain the same.
 
 | Live acceptance scenario | Status |
 | --- | --- |
-| Safe acyclic chain | Pending |
-| Bounded persistent cycle | Pending |
-| Unit-fanout branching amplification rejection | Pending |
-| Ambiguous semantic trigger rejection | Pending |
-| Unauthorized permit rejection | Pending |
-| Permit replay rejection | Pending |
+| Safe acyclic chain | PASS. Network 1 had two active unit-fanout edges, `ACYCLIC`, and root totals `[3, 2, 1]` under budget 25. [First edge](https://explorer-studio.genlayer.com/tx/0x497672e55786c4f6c5520b0e7e2164873f57bc1c9ff1981ef105ab296d2615a7) · [Second edge](https://explorer-studio.genlayer.com/tx/0x4e6bb5654d2d95d4298dd98f65d0264e753188f5731b49621e087ae47d5677be) |
+| Bounded persistent cycle | FAIL. Network 2 remained `ACYCLIC` with root totals `[2, 1]`. Its return edge recorded status 5, `UNCERTAIN / MALFORMED_RESULT`, after finalized successful execution. [Return-edge receipt](https://explorer-studio.genlayer.com/tx/0x110103b8e578d414c5b2c41bc64e7e801e873a8e608a8ca70fd4351cfb52651f) |
+| Unit-fanout branching amplification rejection | NOT RUN. The reviewer runner stopped at the cycle assertion. |
+| Ambiguous semantic trigger rejection | NOT RUN. The return-edge rejection exercised malformed-result handling. |
+| Unauthorized permit rejection | NOT RUN. The cycle never reached the sealed-run setup. |
+| Permit replay rejection | NOT RUN. No permit was issued. |
+
+The [continuation log](live-review-continuation.jsonl) records submitted hashes,
+27 finalized transaction checks, decoded network and edge readbacks, and the
+stopping assertion. Both DAG edge assessments and the cycle return-edge
+assessment finalized with leader execution `SUCCESS`. A successful
+assessment transaction can still reject an edge.
 
 Recheck the existing transaction without a signer before running the demo:
 

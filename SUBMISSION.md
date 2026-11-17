@@ -22,6 +22,6 @@ The contract does not monitor unregistered real-world side effects. Its safety t
 - Review: `docs/REVIEWER_DEMO.md`
 - Tests: `python -m unittest discover -s tests -v`
 - Chain: stable StudioNet 61999 only; project-local CLI pin 0.39.1
-- [StudioNet deployment and acceptance status](docs/LIVE_EVIDENCE.md)
+- StudioNet contract `0xD232F889687DBa1128CB03DA1B7bcE157717f226`. Finalized deployment and exact source parity verified. The DAG passed. Full live acceptance remains blocked by a malformed semantic result on the persistent-cycle return edge. [Deployment and acceptance evidence](docs/LIVE_EVIDENCE.md)
 
 No claim of deployed consensus, a source-parity receipt, or any specific GLP score is made without evidence.
