@@ -10,8 +10,10 @@ import { CalldataAddress } from 'genlayer-js/types';
 
 const rpc = 'https://studio.genlayer.com/api';
 const address = process.argv[2];
-const reuseDag = process.argv.includes('--reuse-empty-dag');
 assert.match(address ?? '', /^0x[0-9a-fA-F]{40}$/);
+if (process.argv.includes('--reuse-empty-dag')) {
+  throw new Error('Refusing implicit empty-counter reuse; run against a fresh deployment or add explicit scenario IDs.');
+}
 async function request(method, params = []) {
   const response = await fetch(rpc, {
     method: 'POST', headers: {'content-type': 'application/json'},
@@ -27,7 +29,7 @@ assert.equal(JSON.parse(readFileSync(new URL('../node_modules/genlayer/package.j
 function password() {
   const {stdin, stderr} = process;
   assert.ok(stdin.isTTY);
-  stderr.write('PRAEST keystore password: ');
+  stderr.write('GainLock StudioNet keystore password: ');
   return new Promise((resolve, reject) => {
     let value = '';
     function finish(error) {
@@ -64,7 +66,7 @@ const emit = value => {
   console.log(line);
 };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function wait(hash, requireFinal) {
+async function wait(hash) {
   for (let i = 0; i < 120; ++i) {
     await pause(4500);
     let t;
@@ -74,7 +76,7 @@ async function wait(hash, requireFinal) {
       if (i === 119) throw error;
       continue;
     }
-    if (t && (t.status === 'FINALIZED' || (!requireFinal && t.status === 'ACCEPTED'))) return t;
+    if (t && t.status === 'FINALIZED') return t;
   }
   throw new Error(`Timed out waiting for ${hash}`);
 }
@@ -85,13 +87,15 @@ function result(t) {
       ?? leader?.genvm_result?.raw_error
       ?? (leader?.execution_result === 'ERROR' && leader.result
         ? Buffer.from(leader.result, 'base64').subarray(1).toString('utf8') : null),
+    return_data: leader?.result ?? null,
     votes: t.consensus_data?.votes};
 }
 async function write(actor, method, args, expected = 'SUCCESS') {
   const hash = await writers.get(actor).writeContract({address, functionName: method, args, value: 0n});
   emit({submitted: hash, caller: actor.address, method, args: args.map(a => a instanceof CalldataAddress ? '0x' + Buffer.from(a.bytes).toString('hex') : a)});
   records.push({hash, method, expected});
-  const observed = result(await wait(hash, false));
+  const observed = result(await wait(hash));
+  assert.equal(observed.status, 'FINALIZED', JSON.stringify(observed));
   emit({hash, method, observed});
   assert.equal(observed.execution, expected, JSON.stringify(observed));
   return observed;
@@ -101,13 +105,28 @@ async function read(method, ...args) {
   emit({read: method, args, value});
   return value;
 }
-let networkId = 0, nodeId = 0, edgeId = 0;
+async function nextId(method) {
+  for (let id = 1; id <= 1000000; ++id) {
+    try {
+      await readers.readContract({address, functionName: method, args: [id]});
+    } catch (_) {
+      return id;
+    }
+  }
+  throw new Error(`Could not find an available ${method} identifier`);
+}
+async function assertFailedUnchanged(actor, method, args, viewMethod, ...viewArgs) {
+  const before = await read(viewMethod, ...viewArgs);
+  await write(actor, method, args, 'ERROR');
+  const after = await read(viewMethod, ...viewArgs);
+  assert.deepEqual(after, before);
+}
 const addressArg = actor => new CalldataAddress(Buffer.from(actor.address.slice(2), 'hex'));
 const event = 'Every output is an event tagged REVIEW-DEMO with payment confirmed.';
 const trigger = 'Trigger on every event tagged REVIEW-DEMO with payment confirmed.';
 async function network(name, hops, budget, specs) {
-  const id = ++networkId;
-  if (!(reuseDag && id === 1)) await write(owner, 'create_network', [name, hops, budget]);
+  const id = await nextId('get_network');
+  await write(owner, 'create_network', [name, hops, budget]);
   const existing = await read('get_network', id);
   assert.equal(existing.name, name);
   assert.equal(Number(existing.max_hops), hops);
@@ -115,7 +134,7 @@ async function network(name, hops, budget, specs) {
   assert.deepEqual(existing.node_ids, []);
   const nodes = [];
   for (const [label, actor, output, condition] of specs) {
-    const n = ++nodeId;
+    const n = await nextId('get_node');
     await write(owner, 'register_node', [id, addressArg(actor), 'Review node ' + label, output ?? event, condition ?? trigger]);
     const proposed = await read('get_node', n);
     await write(actor, 'accept_node', [n, proposed.spec_hash]);
@@ -125,15 +144,21 @@ async function network(name, hops, budget, specs) {
   return {id, nodes};
 }
 async function edge(network, u, v, expected) {
-  const id = ++edgeId;
+  const id = await nextId('get_edge');
   const from = network.nodes[u], to = network.nodes[v];
   await write(owner, 'propose_edge', [network.id, from.id, to.id, 1]);
   const proposed = await read('get_edge', id);
   for (const actor of new Set([from.actor, to.actor])) {
     await write(actor, 'consent_edge', [id, proposed.proposal_hash]);
   }
-  await write(owner, 'assess_edge', [id]);
-  const assessed = await read('get_edge', id);
+  let assessed;
+  for (let attempt = 1; attempt <= 3; ++attempt) {
+    await write(owner, 'assess_edge', [id]);
+    assessed = await read('get_edge', id);
+    if (Number(assessed.status) !== 6 || attempt === 3) break;
+    emit({edge_id: id, scenario: 'controlled model-format recovery', attempt,
+      status: Number(assessed.status), retrying: true});
+  }
   assert.equal(Number(assessed.status), expected, JSON.stringify(assessed));
   return {id, assessed};
 }
@@ -150,28 +175,42 @@ try {
 
   const cycle = await network('Review persistent', 5, 7, pair);
   const ab = await edge(cycle, 0, 1, 2);
-  await edge(cycle, 1, 0, 2);
+  const ba = await edge(cycle, 1, 0, 2);
   const bounded = await read('get_graph_analysis', cycle.id);
   assert.equal(bounded.cycle_kind, 'PERSISTENT');
   assert.deepEqual(bounded.root_totals.map(Number), [6, 6]);
   await write(owner, 'seal_network', [cycle.id]);
   assert.equal((await read('get_network', cycle.id)).sealed, true);
+  const runId = await nextId('get_run');
   await write(owner, 'start_run', [cycle.id, cycle.nodes[0].id]);
-  const run = await read('get_run', 1);
+  const run = await read('get_run', runId);
   const permit = Number(run.root_permit_id);
-  const unauthorized = await write(peer, 'consume_permit', [permit], 'ERROR');
-  assert.match(JSON.stringify(unauthorized), /wrong event controller/i);
-  assert.equal((await read('get_permit', permit)).spent, false);
+  await assertFailedUnchanged(peer, 'consume_permit', [permit], 'get_permit', permit);
+  await assertFailedUnchanged(owner, 'spawn_child', [permit, ab.id], 'get_permit', permit);
   await write(owner, 'consume_permit', [permit]);
-  const replay = await write(owner, 'consume_permit', [permit], 'ERROR');
-  assert.match(JSON.stringify(replay), /permit already spent/i);
-  assert.equal((await read('get_permit', permit)).spent, true);
+  await assertFailedUnchanged(owner, 'consume_permit', [permit], 'get_permit', permit);
+  const childBId = await nextId('get_permit');
   await write(owner, 'spawn_child', [permit, ab.id]);
-  const child = await read('get_permit', permit + 1);
+  const child = await read('get_permit', childBId);
   assert.equal(Number(child.depth), 1);
   assert.equal(Number(child.node_id), cycle.nodes[1].id);
-  await write(peer, 'consume_permit', [permit + 1]);
-  assert.equal((await read('get_permit', permit + 1)).spent, true);
+  await write(peer, 'consume_permit', [childBId]);
+  assert.equal((await read('get_permit', childBId)).spent, true);
+  const childAId = await nextId('get_permit');
+  await write(peer, 'spawn_child', [childBId, ba.id]);
+  const childA = await read('get_permit', childAId);
+  assert.equal(Number(childA.depth), 2);
+  assert.equal(Number(childA.node_id), cycle.nodes[0].id);
+  await write(owner, 'consume_permit', [childAId]);
+  await write(owner, 'close_run', [runId]);
+  assert.equal((await read('get_run', runId)).active, false);
+
+  const closedRunId = await nextId('get_run');
+  await write(owner, 'start_run', [cycle.id, cycle.nodes[0].id]);
+  const closedRun = await read('get_run', closedRunId);
+  const closedPermit = Number(closedRun.root_permit_id);
+  await write(owner, 'close_run', [closedRunId]);
+  await assertFailedUnchanged(owner, 'consume_permit', [closedPermit], 'get_permit', closedPermit);
   emit({scenario: 'bounded persistent cycle and permit controls', passed: true});
 
   const amp = await network('Review branching', 6, 12, trio);
@@ -197,8 +236,8 @@ try {
 }
 for (const {hash, method, expected} of records) {
   const tx = await request('eth_getTransactionByHash', [hash]);
-  const verification = result(tx?.status === 'FINALIZED' ? tx : await wait(hash, true));
+  const verification = result(tx?.status === 'FINALIZED' ? tx : await wait(hash));
   emit({hash, method, verification, explorer: `https://explorer-studio.genlayer.com/tx/${hash}`});
-  if (verification.execution !== expected) process.exitCode = 1;
+  if (verification.status !== 'FINALIZED' || verification.execution !== expected) process.exitCode = 1;
 }
 if (evidenceFd !== null) closeSync(evidenceFd);

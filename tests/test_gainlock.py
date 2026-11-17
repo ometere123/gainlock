@@ -15,6 +15,47 @@ import unittest
 CONTRACT = pathlib.Path(__file__).resolve().parents[1] / "contracts" / "gainlock.py"
 
 
+def reference_totals(node_count, edges, max_hops):
+    """Independent small-graph enumerator used as a mathematical oracle."""
+    matrix = [[0] * node_count for _ in range(node_count)]
+    for source, target, multiplicity in edges:
+        matrix[source][target] += multiplicity
+    totals = []
+    for root in range(node_count):
+        layer = [0] * node_count
+        layer[root] = 1
+        total = 1
+        for _ in range(max_hops):
+            next_layer = [0] * node_count
+            for source in range(node_count):
+                for target in range(node_count):
+                    next_layer[target] += layer[source] * matrix[source][target]
+            total += sum(next_layer)
+            layer = next_layer
+        totals.append(total)
+    return totals
+
+
+def reference_has_cycle(node_count, edges):
+    adjacency = [[] for _ in range(node_count)]
+    for source, target, _ in edges:
+        adjacency[source].append(target)
+
+    def visit(node, active, seen):
+        if node in active:
+            return True
+        if node in seen:
+            return False
+        seen.add(node)
+        active.add(node)
+        if any(visit(child, active, seen) for child in adjacency[node]):
+            return True
+        active.remove(node)
+        return False
+
+    return any(visit(root, set(), set()) for root in range(node_count))
+
+
 class FakeTreeMap:
     def __class_getitem__(cls, item):
         return dict
@@ -150,15 +191,48 @@ class KernelTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.m.bounded_analysis(*args)
 
+    def test_reference_limits_are_exact(self):
+        self.assertEqual(self.m.bounded_analysis(1, [], 1, 1)["root_totals"], [1])
+        self.assertEqual(self.m.bounded_analysis(12, [], 12, 100000)["max_total"], 1)
+        with self.assertRaises(ValueError):
+            self.m.bounded_analysis(13, [], 1, 1)
+        with self.assertRaises(ValueError):
+            self.m.bounded_analysis(1, [], 13, 1)
+        with self.assertRaises(ValueError):
+            self.m.bounded_analysis(1, [(0, 0, 9)], 1, 1)
+        with self.assertRaises(ValueError):
+            self.m.bounded_analysis(1, [], 1, 100001)
+
     def test_saturation_prevents_integer_blowup(self):
         a = self.m.bounded_analysis(1, [(0, 0, 8)], 12, 100000)
         self.assertEqual(a["root_totals"], [100001])
 
     def test_safe_result_strict(self):
         self.assertEqual(self.m._safe_result('{"relation":"MATCH","reason":"valid"}')["relation"], "MATCH")
-        self.assertEqual(self.m._safe_result('{"relation":true}')["relation"], "UNCERTAIN")
-        self.assertEqual(self.m._safe_result("not json")["relation"], "UNCERTAIN")
-        self.assertEqual(self.m._safe_result(None)["relation"], "UNCERTAIN")
+        self.assertEqual(self.m._safe_result('{"relation":true}')["relation"], "MODEL_ERROR")
+        self.assertEqual(self.m._safe_result("not json")["relation"], "MODEL_ERROR")
+        self.assertEqual(self.m._safe_result(None)["relation"], "MODEL_ERROR")
+        self.assertEqual(self.m._safe_result('{"relation":"MATCH","reason":"x","extra":1}') ["relation"], "MODEL_ERROR")
+        self.assertEqual(self.m._safe_result('{"relation":"MATCH","reason":"x"}' + " " * 2001)["relation"], "MODEL_ERROR")
+
+    def test_reference_graph_totals_and_cycle_presence(self):
+        cases = [
+            (3, [(0, 1, 1), (1, 2, 1)], 6, [3, 2, 1], False),
+            (2, [(0, 1, 1), (1, 0, 1)], 5, [6, 6], True),
+            (3, [(0, 1, 1), (0, 2, 1), (1, 0, 1), (2, 0, 1)], 6,
+             [29, 22, 22], True),
+        ]
+        for node_count, edges, hops, expected, has_cycle in cases:
+            self.assertEqual(reference_totals(node_count, edges, hops), expected)
+            self.assertEqual(reference_has_cycle(node_count, edges), has_cycle)
+            actual = self.m.bounded_analysis(node_count, edges, hops, 100000)
+            self.assertEqual(actual["root_totals"], expected)
+
+    def test_reference_saturation_is_budget_plus_one(self):
+        actual = self.m.bounded_analysis(3,
+            [(0, 1, 1), (0, 2, 1), (1, 0, 1), (2, 0, 1)], 6, 12)
+        self.assertEqual(actual["max_total"], 13)
+        self.assertFalse(actual["admissible"])
 
 
 class ContractTests(unittest.TestCase):
@@ -252,6 +326,61 @@ class ContractTests(unittest.TestCase):
         eid, state = self.edge(n,a,b,relation="UNCERTAIN")
         self.assertEqual(state, self.m.REJECTED_UNCERTAIN)
         self.assertEqual(self.c.get_graph_analysis(n)["max_total"], 1)
+
+    def test_model_error_is_retryable_and_preserves_consents(self):
+        n = self.network()
+        a = self.node(n, "alice", "An invoice is approved for payment.", "When an invoice is approved.")
+        b = self.node(n, "bob", "A payment alert is delivered.", "When an invoice is approved.")
+        self.sender("owner")
+        eid = self.c.propose_edge(n, a, b, 1)
+        for who in ("alice", "bob"):
+            self.sender(who)
+            self.c.consent_edge(eid, self.c.get_edge(eid)["proposal_hash"])
+        self.sdk.gl.nondet.answers = ["not json", "not json"]
+        self.sender("third-party")
+        self.assertEqual(self.c.assess_edge(eid), self.m.MODEL_ERROR)
+        first = self.c.get_edge(eid)
+        self.assertEqual(first["assessment_attempts"], 1)
+        self.assertTrue(first["source_ok"] and first["target_ok"])
+        self.assertEqual(self.c.get_graph_analysis(n)["max_total"], 1)
+        self.sdk.gl.nondet.answers = [
+            json.dumps({"relation": "MATCH", "reason": "The frozen descriptions entail the trigger."}),
+            json.dumps({"relation": "MATCH", "reason": "Independent agreement."}),
+        ]
+        self.assertEqual(self.c.assess_edge(eid), self.m.ACTIVE)
+        final = self.c.get_edge(eid)
+        self.assertEqual(final["assessment_attempts"], 2)
+        self.assertEqual(final["relation"], "MATCH")
+
+    def test_model_error_retry_limit_is_committed_and_terminal(self):
+        n = self.network()
+        a = self.node(n, "alice", "An invoice is approved for payment.", "When an invoice is approved.")
+        b = self.node(n, "bob", "A payment alert is delivered.", "When an invoice is approved.")
+        self.sender("owner")
+        eid = self.c.propose_edge(n, a, b, 1)
+        for who in ("alice", "bob"):
+            self.sender(who)
+            self.c.consent_edge(eid, self.c.get_edge(eid)["proposal_hash"])
+        self.sender("third-party")
+        self.sdk.gl.nondet.answers = ["bad", "bad", "bad", "bad", "bad", "bad"]
+        self.assertEqual(self.c.assess_edge(eid), self.m.MODEL_ERROR)
+        self.assertEqual(self.c.assess_edge(eid), self.m.MODEL_ERROR)
+        self.assertEqual(self.c.assess_edge(eid), self.m.RETRY_EXHAUSTED)
+        edge = self.c.get_edge(eid)
+        self.assertEqual(edge["assessment_attempts"], 3)
+        self.assertTrue(edge["retry_exhausted"])
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.assess_edge(eid)
+        self.assertEqual(self.c.get_graph_analysis(n)["max_total"], 1)
+
+    def test_uncertain_is_terminal_not_retryable(self):
+        n = self.network()
+        a = self.node(n, "alice", "An invoice is approved for payment.", "When an invoice is approved.")
+        b = self.node(n, "bob", "A payment alert is delivered.", "When an invoice is approved.")
+        eid, state = self.edge(n, a, b, relation="UNCERTAIN")
+        self.assertEqual(state, self.m.REJECTED_UNCERTAIN)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.assess_edge(eid)
 
     def test_no_match_rejected(self):
         n = self.network()
@@ -354,6 +483,63 @@ class ContractTests(unittest.TestCase):
             self.c.consume_permit(1)
         self.assertFalse(self.c.is_permit_spendable(1,"alice"))
 
+    def test_closed_run_releases_active_capacity_without_reusing_ids(self):
+        n1 = self.network()
+        a1 = self.node(n1, "alice", "A payment event is reported.", "When a payment event is reported.")
+        n2 = self.network()
+        a2 = self.node(n2, "bob", "An invoice event is reported.", "When an invoice event is reported.")
+        for network, node, controller in ((n1, a1, "alice"), (n2, a2, "bob")):
+            self.sender("owner")
+            self.c.seal_network(network)
+            self.sender(controller)
+            run = self.c.start_run(network, node)
+            permit = self.c.get_run(run)["root_permit_id"]
+            self.c.close_run(run)
+            self.assertFalse(self.c.is_permit_spendable(permit, controller))
+        self.sender("owner")
+        self.assertEqual(self.c.get_network(n1)["active_runs"], 0)
+        self.assertEqual(self.c.get_network(n1)["active_permits"], 0)
+        self.assertEqual(self.c.get_network(n2)["active_runs"], 0)
+        self.assertEqual(self.c.get_network(n2)["active_permits"], 0)
+
+    def test_many_closed_runs_do_not_hit_historical_lifetime_ceiling(self):
+        n = self.network(budget=1, hops=1)
+        a = self.node(n, "alice", "A payment event is reported.", "When a payment event is reported.")
+        self.sender("owner")
+        self.c.seal_network(n)
+        self.sender("alice")
+        last_run = 0
+        last_permit = 0
+        for _ in range(self.m.MAX_RUNS + 1):
+            last_run = self.c.start_run(n, a)
+            last_permit = self.c.get_run(last_run)["root_permit_id"]
+            self.c.close_run(last_run)
+        self.assertEqual(int(last_run), self.m.MAX_RUNS + 1)
+        self.assertEqual(int(last_permit), self.m.MAX_RUNS + 1)
+        self.assertEqual(self.c.get_network(n)["active_runs"], 0)
+        self.assertEqual(self.c.get_network(n)["active_permits"], 0)
+
+    def test_active_run_capacity_is_per_network(self):
+        n1 = self.network(budget=1, hops=1)
+        a1 = self.node(n1, "alice", "A payment event is reported.", "When a payment event is reported.")
+        n2 = self.network(budget=1, hops=1)
+        a2 = self.node(n2, "bob", "An invoice event is reported.", "When an invoice event is reported.")
+        self.sender("owner")
+        self.c.seal_network(n1)
+        self.c.seal_network(n2)
+        self.sender("alice")
+        runs = [self.c.start_run(n1, a1) for _ in range(self.m.MAX_RUNS)]
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.start_run(n1, a1)
+        self.sender("bob")
+        run2 = self.c.start_run(n2, a2)
+        self.assertEqual(self.c.get_run(run2)["network_id"], n2)
+        self.sender("alice")
+        for run in runs:
+            self.c.close_run(run)
+        self.sender("bob")
+        self.c.close_run(run2)
+
     def test_sealed_graph_hash_is_stable(self):
         n = self.network()
         a = self.node(n,"alice","A payment event is reported.","When a payment event is reported.")
@@ -361,6 +547,62 @@ class ContractTests(unittest.TestCase):
         h = self.c.seal_network(n)
         self.assertEqual(len(h),64)
         self.assertEqual(self.c.get_network(n)["graph_hash"],h)
+
+    def test_network_and_text_boundaries(self):
+        self.sender("owner")
+        n = self.c.create_network("N" * self.m.MAX_NAME, self.m.MAX_HOPS, self.m.MAX_BUDGET)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.create_network("N" * (self.m.MAX_NAME + 1), 1, 1)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.create_network("Valid network", 0, 1)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.create_network("Valid network", 13, 1)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.create_network("Valid network", 1, 0)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.create_network("Valid network", 1, self.m.MAX_BUDGET + 1)
+        node = self.c.register_node(n, "alice", "L" * self.m.MAX_NAME,
+            "E" * self.m.MAX_EVENT_TEXT, "T" * self.m.MAX_TRIGGER_TEXT)
+        self.sender("alice")
+        self.c.accept_node(node, self.c.get_node(node)["spec_hash"])
+        self.assertEqual(len(self.c.get_node(node)["output_event"]), self.m.MAX_EVENT_TEXT)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.sender("owner")
+            self.c.register_node(n, "alice", "Label ok", "E" * (self.m.MAX_EVENT_TEXT + 1), "Trigger ok")
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.register_node(n, "alice", "Label ok", "Event ok", "T" * (self.m.MAX_TRIGGER_TEXT + 1))
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.register_node(n, "alice", "Label ok", "Bad\nEvent", "Trigger ok")
+
+    def test_node_and_edge_limits_are_exact(self):
+        n = self.network()
+        nodes = []
+        for index in range(self.m.MAX_NODES):
+            self.sender("owner")
+            node = self.c.register_node(n, "controller", f"Node {index:02d} label",
+                "A registered event is emitted.", "When a registered event is emitted.")
+            self.sender("controller")
+            self.c.accept_node(node, self.c.get_node(node)["spec_hash"])
+            nodes.append(node)
+        self.sender("owner")
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.register_node(n, "controller", "Node overflow", "A registered event is emitted.",
+                                 "When a registered event is emitted.")
+        pairs = [(source, target) for source in nodes for target in nodes if source != target]
+        for source, target in pairs[:self.m.MAX_EDGES]:
+            self.c.propose_edge(n, source, target, 1)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.propose_edge(n, pairs[self.m.MAX_EDGES][0], pairs[self.m.MAX_EDGES][1], 1)
+
+    def test_fanout_boundaries_are_exact(self):
+        n = self.network()
+        a = self.node(n, "alice", "A payment event is reported.", "When a payment event is reported.")
+        b = self.node(n, "bob", "A notification event is reported.", "When a notification event is reported.")
+        self.sender("owner")
+        edge = self.c.propose_edge(n, a, b, self.m.MAX_FANOUT)
+        self.assertEqual(self.c.get_edge(edge)["fanout"], self.m.MAX_FANOUT)
+        with self.assertRaises(self.sdk.gl.vm.UserError):
+            self.c.propose_edge(n, b, a, self.m.MAX_FANOUT + 1)
 
 
 if __name__ == "__main__":

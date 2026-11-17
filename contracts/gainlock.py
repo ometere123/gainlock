@@ -30,6 +30,9 @@ ACTIVE = 2
 REJECTED_SEMANTIC = 3
 REJECTED_BUDGET = 4
 REJECTED_UNCERTAIN = 5
+MODEL_ERROR = 6
+RETRY_EXHAUSTED = 7
+MAX_ASSESSMENTS = 3
 
 
 def reject(msg: str):
@@ -39,8 +42,10 @@ def reject(msg: str):
 def text_field(value: str, field: str, max_len: int) -> str:
     if not isinstance(value, str):
         reject(field + " must be text")
+    if any(ord(c) < 32 for c in value):
+        reject("invalid " + field)
     value = " ".join(value.strip().split())
-    if len(value) < 8 or len(value) > max_len or any(ord(c) < 32 for c in value):
+    if len(value) < 8 or len(value) > max_len:
         reject("invalid " + field)
     return value
 
@@ -55,21 +60,40 @@ def _hash(domain: str, value: Any) -> str:
 
 
 def _safe_result(response: Any) -> dict:
-    """Strictly parse a bounded semantic outcome; never coerce invalid results."""
+    """Strictly parse a bounded semantic outcome; never coerce invalid results.
+
+    MODEL_ERROR is an internal transport/format classification. It is never a
+    substantive semantic answer and is handled by assess_edge's bounded retry
+    state machine.
+    """
+    def model_error(reason: str) -> dict:
+        return {"relation": "MODEL_ERROR", "reason": reason[:MAX_REASON]}
+
     if isinstance(response, str):
         if len(response) > 2000:
-            return {"relation": "UNCERTAIN", "reason": "OVERSIZED_RESULT"}
+            return model_error("OVERSIZED_RESULT")
         try:
             response = json.loads(response)
         except (ValueError, TypeError):
-            return {"relation": "UNCERTAIN", "reason": "MALFORMED_RESULT"}
+            return model_error("MALFORMED_RESULT")
     if not isinstance(response, dict):
-        return {"relation": "UNCERTAIN", "reason": "MALFORMED_RESULT"}
+        return model_error("MALFORMED_RESULT")
+    try:
+        if len(json.dumps(response, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=True)) > 2000:
+            return model_error("OVERSIZED_RESULT")
+    except (TypeError, ValueError):
+        return model_error("MALFORMED_RESULT")
+    if set(response.keys()) != {"relation", "reason"}:
+        return model_error("MALFORMED_RESULT")
     relation = response.get("relation")
     reason = response.get("reason", "")
     if relation not in ("MATCH", "NO_MATCH", "UNCERTAIN") or not isinstance(reason, str):
-        return {"relation": "UNCERTAIN", "reason": "MALFORMED_RESULT"}
-    reason = " ".join(reason.split())[:MAX_REASON]
+        return model_error("MALFORMED_RESULT")
+    normalized_reason = " ".join(reason.split())
+    if len(normalized_reason) > MAX_REASON:
+        return model_error("OVERSIZED_REASON")
+    reason = normalized_reason
     return {"relation": relation, "reason": reason}
 
 
@@ -192,6 +216,8 @@ class Network:
     node_ids: DynArray[u256]
     edge_ids: DynArray[u256]
     graph_hash: str
+    active_runs: u32
+    active_permits: u32
 
 
 @allow_storage
@@ -221,6 +247,8 @@ class Edge:
     proposal_hash: str
     assessed_graph_kind: str
     assessed_max_work: u32
+    assessment_attempts: u8
+    retry_exhausted: bool
 
 
 @allow_storage
@@ -233,6 +261,7 @@ class Run:
     root_permit_id: u256
     started_by: Address
     active: bool
+    outstanding_permits: u32
 
 
 @allow_storage
@@ -359,7 +388,8 @@ class GainLock(gl.Contract):
         self.next_network_id = u256(int(id) + 1)
         self.networks[id] = Network(
             owner=gl.message.sender_address, name=name, max_hops=max_hops,
-            budget=budget, sealed=False, version=u32(1), node_ids=[], edge_ids=[], graph_hash="")
+            budget=budget, sealed=False, version=u32(1), node_ids=[], edge_ids=[], graph_hash="",
+            active_runs=u32(0), active_permits=u32(0))
         return id
 
     @gl.public.write
@@ -389,6 +419,8 @@ class GainLock(gl.Contract):
             reject("network sealed")
         if gl.message.sender_address != node.controller:
             reject("only controller can accept")
+        if not isinstance(expected_spec_hash, str):
+            reject("node hash must be text")
         if expected_spec_hash != node.spec_hash:
             reject("node hash mismatch")
         node.approved = True
@@ -416,7 +448,8 @@ class GainLock(gl.Contract):
         self.edges[id] = Edge(network_id=network_id,source=source,target=target,fanout=fanout,
                               status=u8(PROPOSED),source_ok=False,target_ok=False,
                               relation="",reason="",proposal_hash=key,
-                              assessed_graph_kind="",assessed_max_work=u32(0))
+                              assessed_graph_kind="",assessed_max_work=u32(0),
+                              assessment_attempts=u8(0),retry_exhausted=False)
         n.edge_ids.append(id)
         return id
 
@@ -426,6 +459,8 @@ class GainLock(gl.Contract):
         n = self._network(e.network_id)
         if n.sealed or int(e.status) != PROPOSED:
             reject("edge no longer pending")
+        if not isinstance(expected_proposal_hash, str):
+            reject("edge hash must be text")
         if expected_proposal_hash != e.proposal_hash:
             reject("edge hash mismatch")
         sender = gl.message.sender_address
@@ -441,7 +476,9 @@ class GainLock(gl.Contract):
     def assess_edge(self, edge_id: u256) -> u8:
         e = self._edge(edge_id)
         n = self._network(e.network_id)
-        if n.sealed or int(e.status) != PROPOSED:
+        if e.retry_exhausted or int(e.assessment_attempts) >= MAX_ASSESSMENTS:
+            reject("assessment retry limit reached")
+        if n.sealed or int(e.status) not in (PROPOSED, MODEL_ERROR):
             reject("edge not pending")
         if not e.source_ok or not e.target_ok:
             reject("both endpoint consents required")
@@ -457,18 +494,39 @@ class GainLock(gl.Contract):
             proposed = leader_result.calldata
             if not isinstance(proposed, dict):
                 return False
-            if proposed.get("relation") not in ("MATCH", "NO_MATCH", "UNCERTAIN"):
+            if proposed.get("relation") not in ("MATCH", "NO_MATCH", "UNCERTAIN", "MODEL_ERROR"):
                 return False
             independently_derived = leader_fn()
             return independently_derived["relation"] == proposed.get("relation")
 
         finding = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+        # This increment is deliberately after run_nondet_unsafe. If validator
+        # consensus disagrees, the transaction aborts and no attempt is
+        # charged on-chain.
+        attempts = int(e.assessment_attempts) + 1
+        e.assessment_attempts = u8(attempts)
         relation = finding["relation"]
-        e.relation = relation
-        e.reason = finding["reason"][:MAX_REASON]
-        if relation != "MATCH":
-            e.status = u8(REJECTED_SEMANTIC if relation == "NO_MATCH" else REJECTED_UNCERTAIN)
+        if relation == "MODEL_ERROR":
+            # Do not represent a formatting/transport problem as UNCERTAIN.
+            # The exact frozen proposal and both consents remain intact so the
+            # same edge can be retried without changing its commitments.
+            e.relation = ""
+            e.reason = finding["reason"][:MAX_REASON]
+            e.assessed_graph_kind = ""
+            e.assessed_max_work = u32(0)
+            if attempts >= MAX_ASSESSMENTS:
+                e.status = u8(RETRY_EXHAUSTED)
+                e.retry_exhausted = True
+            else:
+                e.status = u8(MODEL_ERROR)
         else:
+            e.relation = relation
+            e.reason = finding["reason"][:MAX_REASON]
+        if relation == "NO_MATCH":
+            e.status = u8(REJECTED_SEMANTIC)
+        elif relation == "UNCERTAIN":
+            e.status = u8(REJECTED_UNCERTAIN)
+        elif relation == "MATCH":
             forecast = self._analysis(n, (int(e.source), int(e.target), int(e.fanout)))
             e.assessed_graph_kind = forecast["cycle_kind"]
             e.assessed_max_work = u32(forecast["max_total"])
@@ -490,7 +548,8 @@ class GainLock(gl.Contract):
             reject("empty graph")
         if any(not self._node(i).approved for i in n.node_ids):
             reject("unaccepted node")
-        if any(int(self._edge(i).status) == PROPOSED for i in n.edge_ids):
+        if any(int(self._edge(i).status) in (PROPOSED, MODEL_ERROR, RETRY_EXHAUSTED)
+               for i in n.edge_ids):
             reject("unresolved edge")
         result = self._analysis(n)
         if not result["admissible"]:
@@ -510,8 +569,10 @@ class GainLock(gl.Contract):
             reject("network not sealed or wrong node")
         if gl.message.sender_address != node.controller:
             reject("only root controller")
-        if int(self.next_run_id) > MAX_RUNS or int(self.next_permit_id) > MAX_PERMITS:
-            reject("ledger capacity reached")
+        if int(n.active_runs) >= MAX_RUNS:
+            reject("active run capacity reached")
+        if int(n.active_permits) >= MAX_PERMITS:
+            reject("active permit capacity reached")
         forecast = self._analysis(n)
         index = [int(i) for i in n.node_ids].index(int(root_node))
         if forecast["root_totals"][index] > int(n.budget):
@@ -520,9 +581,12 @@ class GainLock(gl.Contract):
         self.next_run_id = u256(int(id) + 1)
         p_id = self.next_permit_id
         self.next_permit_id = u256(int(p_id) + 1)
+        n.active_runs = u32(int(n.active_runs) + 1)
+        n.active_permits = u32(int(n.active_permits) + 1)
         self.runs[id] = Run(network_id=network_id,root_node=root_node,graph_hash=n.graph_hash,
                             permits_issued=u32(1),root_permit_id=p_id,
-                            started_by=gl.message.sender_address,active=True)
+                            started_by=gl.message.sender_address,active=True,
+                            outstanding_permits=u32(1))
         self.permits[p_id] = Permit(run_id=id,node_id=root_node,parent_id=u256(0),depth=u8(0),spent=False)
         PermitIssued(p_id,id).emit()
         return id
@@ -537,7 +601,12 @@ class GainLock(gl.Contract):
             reject("wrong event controller")
         if p.spent:
             reject("permit already spent")
+        n = self._network(r.network_id)
+        if int(r.outstanding_permits) < 1 or int(n.active_permits) < 1:
+            reject("permit accounting error")
         p.spent = True
+        r.outstanding_permits = u32(int(r.outstanding_permits) - 1)
+        n.active_permits = u32(int(n.active_permits) - 1)
         PermitSpent(permit_id, p.run_id).emit()
         return True
 
@@ -561,10 +630,14 @@ class GainLock(gl.Contract):
         used = int(self.parent_spawn_count.get(k) or 0)
         if used >= int(e.fanout):
             reject("per-edge fanout exceeded")
-        if int(r.permits_issued) >= int(n.budget) or int(self.next_permit_id) > MAX_PERMITS:
+        if int(r.permits_issued) >= int(n.budget):
             reject("run workload budget exhausted")
+        if int(n.active_permits) >= MAX_PERMITS:
+            reject("active permit capacity reached")
         self.parent_spawn_count[k] = u8(used + 1)
         r.permits_issued = u32(int(r.permits_issued) + 1)
+        r.outstanding_permits = u32(int(r.outstanding_permits) + 1)
+        n.active_permits = u32(int(n.active_permits) + 1)
         id = self.next_permit_id
         self.next_permit_id = u256(int(id) + 1)
         self.permits[id] = Permit(run_id=p.run_id,node_id=e.target,
@@ -579,7 +652,13 @@ class GainLock(gl.Contract):
             reject("only run starter")
         if not r.active:
             reject("run already closed")
+        n = self._network(r.network_id)
+        if int(n.active_runs) < 1 or int(n.active_permits) < int(r.outstanding_permits):
+            reject("run accounting error")
         r.active = False
+        n.active_runs = u32(int(n.active_runs) - 1)
+        n.active_permits = u32(int(n.active_permits) - int(r.outstanding_permits))
+        r.outstanding_permits = u32(0)
 
     @gl.public.view
     def get_network(self, network_id: u256) -> dict:
@@ -587,7 +666,8 @@ class GainLock(gl.Contract):
         return {"owner":str(n.owner),"name":n.name,"max_hops":int(n.max_hops),
                 "budget":int(n.budget),"sealed":n.sealed,"version":int(n.version),
                 "node_ids":[int(i) for i in n.node_ids],"edge_ids":[int(i) for i in n.edge_ids],
-                "graph_hash":n.graph_hash}
+                "graph_hash":n.graph_hash,"active_runs":int(n.active_runs),
+                "active_permits":int(n.active_permits)}
 
     @gl.public.view
     def get_node(self, node_id: u256) -> dict:
@@ -604,7 +684,9 @@ class GainLock(gl.Contract):
                 "fanout":int(e.fanout),"status":int(e.status),"source_ok":e.source_ok,
                 "target_ok":e.target_ok,"relation":e.relation,"reason":e.reason,
                 "proposal_hash":e.proposal_hash,"assessed_graph_kind":e.assessed_graph_kind,
-                "assessed_max_work":int(e.assessed_max_work)}
+                "assessed_max_work":int(e.assessed_max_work),
+                "assessment_attempts":int(e.assessment_attempts),
+                "retry_exhausted":e.retry_exhausted}
 
     @gl.public.view
     def get_graph_analysis(self, network_id: u256) -> dict:
@@ -616,7 +698,8 @@ class GainLock(gl.Contract):
         r = self._run(run_id)
         return {"network_id":int(r.network_id),"root_node":int(r.root_node),
                 "graph_hash":r.graph_hash,"permits_issued":int(r.permits_issued),
-                "root_permit_id":int(r.root_permit_id),"started_by":str(r.started_by),"active":r.active}
+                "root_permit_id":int(r.root_permit_id),"started_by":str(r.started_by),
+                "active":r.active,"outstanding_permits":int(r.outstanding_permits)}
 
     @gl.public.view
     def get_permit(self, permit_id: u256) -> dict:

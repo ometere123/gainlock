@@ -24,7 +24,9 @@ npm ci --ignore-scripts --no-audit --no-fund
 python -m unittest discover -s tests -v
 npm run network:studionet
 npm run verify:studionet
-# wallet/account must already be configured and funded for STABLE StudioNet
+# Optional: pin the intended public account; the guard compares it before deploy.
+$env:GAINLOCK_DEPLOYER_ADDRESS = '0xYourAlreadyConfiguredStudioNetAddress'
+# The wallet/keystore must already be configured and funded for StudioNet.
 npm run deploy:studionet
 ```
 
@@ -41,16 +43,31 @@ npm run deploy:studionet
 
 **Stop if `npm run verify:studionet` fails**. No manual substitution of another endpoint. Do not use `npx genlayer` without `--no-install` or invoke a global CLI. The deployment wrapper uses an explicit executable from this repository's `node_modules`.
 
+`verify:studionet` performs an independent `eth_chainId` request and checks the
+selected alias, exact RPC, local CLI version and selected account. It also
+reports the public address and GEN balance without printing a password or
+private key. `GAINLOCK_DEPLOYER_ADDRESS` is an optional exact-address guard;
+use it whenever more than one configured account exists.
+
 ## Source and receipt proof checklist
 
-1. Record `git rev-parse HEAD`, `python scripts/hash_source.py` and CLI version output.
+1. Record `git rev-parse HEAD`, `python scripts/hash_source.py`, Python/Node
+   versions and the project-local CLI version output.
 2. Record `npm run verify:studionet` output showing alias, RPC and chain ID.
-3. Deploy once; record BOTH the submitted transaction hash and the resulting contract address. If a command fails or times out, inspect the original transaction before retrying.
+3. Deploy once; record BOTH the submitted transaction hash and the resulting
+   contract address. If a command fails or times out, inspect the original
+   transaction before retrying; never broadcast a duplicate blindly.
 4. Poll to `FINALIZED`, and require **execution SUCCESS**, not just a finality label. Record the GenLayer consensus outcome and receipt. A finalized ERROR is failure.
 5. Independently read deployed `GainLock` source using `genlayer code` or Studio's source view. Compare its *source bytes* to the committed `contracts/gainlock.py` SHA-256. Do not use README SHA or assumed source parity.
-6. Execute the honest and malicious flows described in `REVIEWER_DEMO.md` on chain. Record readbacks and explorer URLs after each finality receipt.
+6. Execute the honest and malicious flows described in `REVIEWER_DEMO.md` on
+   chain. Record readbacks and explorer URLs after each finality receipt. A
+   finalized expected error is evidence of a rejected operation, not an
+   ordinary successful execution.
 7. Publish the real address, transaction hashes and parity proof in `docs/LIVE_EVIDENCE.md` and submit links, never screenshots alone.
-8. Do not claim a live pass until the official GenVM checker, direct-mode tests and actual consensus transactions have passed. If unsupported, document the exact blocker.
+8. Do not claim a live pass until the official GenVM checker, Direct Mode tests
+   and actual consensus transactions have passed. If a wallet, provider or
+   validator blocks a scenario, preserve the partial evidence and document the
+   exact blocker instead of substituting Studio Dev or chain 61997.
 
 ## Important CLI commands
 

@@ -39,6 +39,11 @@ work(r) = sum_{k=0..H} sum_v layer_k[v]
 
 A network is admitted only when **`work(r) <= B` for every possible root**. Computation uses exact bounded integers with `B+1` saturation: overflow cannot silently appear safe. The runtime checks permit depth, child fanout and per-run count again.
 
+The graph is not a blanket cycle blocker. A persistent unit-fanout cycle can fit a
+finite horizon, while a branching strongly connected component can amplify even
+when every individual edge declares fanout one. Admission is decided by the exact
+finite-horizon workload, not by the cycle label alone.
+
 Cycle classification is independent of work admissibility:
 
 - `ACYCLIC`: no directed cycle;
@@ -83,6 +88,13 @@ Leader and validators independently reason over the **same two frozen, signed-by
 
 Only `MATCH` is eligible for graph admission. Validators rerun the semantic evaluation and must agree on the substantive classification. If validators reject the leader, normal GenLayer consensus may rotate the leader or leave the transaction undetermined; no valid new edge is created. Reason prose is illustrative, **never a safety input**.
 
+Malformed or oversized model output is an internal `MODEL_ERROR` state, not
+`UNCERTAIN` and never `MATCH`. The same fully consented proposal may be assessed
+again up to three **committed** assessments. A validator-disagreement transaction
+aborts before the counter is written, so it does not consume an on-chain attempt.
+`UNCERTAIN`, `NO_MATCH`, budget rejection and successful `MATCH` are terminal for
+that proposal; three committed model errors become `RETRY_EXHAUSTED`.
+
 There is no live web fetch in this contract. The participants themselves register *immutable, mutually consented semantic specifications*. Agreement on those specifications **does not prove remote services obey them**.
 
 ## Main public interface
@@ -105,6 +117,13 @@ Read-only methods: `get_network`, `get_node`, `get_edge`, `get_graph_analysis`, 
 
 `start_run` returns a run ID; inspect `get_run(run_id).root_permit_id` for the event's actual permit ID. Run IDs and permit IDs are separate counters.
 
+`MAX_RUNS=1000` and `MAX_PERMITS=100000` are active per-network capacity limits,
+not lifetime identifier ceilings. Closing a run releases its active-run and
+outstanding-permit capacity while retaining historical run and permit records.
+The monotonically increasing identifiers are never reused. Storage therefore
+grows with historical activity; the contract does not pretend to reclaim old
+records.
+
 ## Threat boundary (important)
 
 GainLock **does** prevent its own registered controllers from issuing more GainLock permits than their frozen graph envelope allows. It uses exact source/target hash consent, immutable sealed graphs, validator-independent semantic checks, replay-protected permits, and fixed limits.
@@ -119,7 +138,7 @@ Requires Python 3.12+ and Node.js 18+. The project tests require no Docker or Ge
 
 ```sh
 python -m unittest discover -s tests -v
-npm install --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 npm run network:studionet
 npm run verify:studionet
 ```
@@ -131,7 +150,7 @@ The repository **pins `genlayer` CLI to exactly `0.39.1`** in `package.json`. Th
 **Only StudioNet 61999**: `https://studio.genlayer.com/api`, explorer `https://explorer-studio.genlayer.com`.
 
 ```sh
-npm install --no-audit --no-fund
+npm ci --ignore-scripts --no-audit --no-fund
 npm run network:studionet
 npm run verify:studionet
 npm run deploy:studionet
@@ -141,7 +160,18 @@ Deploying requires a locally configured/unlocked funded StudioNet wallet. If the
 
 ## Current verification state
 
-- Python syntax and dependency-free host-mode protocol/adversarial tests: **run locally for this release**; see the run evidence in `docs/TEST_STATUS.md`.
-- **Official GenLayer Direct Mode:** 6 tests passed in GitHub Actions with SDK validator replay. **GenVM linter 0.11.0:** `genvm-lint check` passed. See [test status](docs/TEST_STATUS.md) and the [StudioNet deployment and acceptance ledger](docs/LIVE_EVIDENCE.md).
+- The current release worktree has 40/40 host tests passing on Python 3.12,
+  including an independent graph reference model and five executed mutation-kill
+  checks.
+- The pinned `genlayer-test==0.29.2` Direct Mode suite has 9/9 passing on Ubuntu
+  Python 3.12. Windows execution is blocked before contract assertions by the
+  upstream runner's stdin tempfile cleanup (`WinError 32`); Windows host tests
+  remain part of CI.
+- `genvm-linter==0.11.0` passes `genvm-lint check` against the pinned v0.2.12
+  artifact. The ABI remains 11 public writes and 7 public views.
+- The corrected source is not associated with the historical V1 address. Live
+  deployment and acceptance evidence is added only after a separate finalized
+  StudioNet deployment and exact source-parity check. See [test status](docs/TEST_STATUS.md),
+  [deployment instructions](docs/DEPLOYMENT.md) and the [reviewer walkthrough](docs/REVIEWER_DEMO.md).
 
 The repository contains no frontend because this is a standalone Intelligent Contract primitive. It should be submitted under **Intelligent Contracts**, not Projects.

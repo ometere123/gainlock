@@ -44,6 +44,9 @@ jobs:
 
   genvm-linter:
     runs-on: ubuntu-latest
+    env:
+      GENVM_VERSION: v0.2.12
+      PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

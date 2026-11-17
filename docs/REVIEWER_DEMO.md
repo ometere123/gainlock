@@ -1,6 +1,11 @@
 # GainLock proof walkthrough
 
-This walkthrough is a **procedure**, not fabricated execution evidence. Replace IDs with actual readbacks and submit each StudioNet write as a real transaction. Wait for `FINALIZED + SUCCESS` each time.
+This walkthrough is a **procedure**, not fabricated execution evidence. Replace
+IDs with actual readbacks and submit each StudioNet write as a real transaction.
+The live runner waits for `FINALIZED` and then checks the leader execution
+result. A finalized expected error is recorded as a rejected operation, not as
+a successful state transition. Controlled Direct Mode evidence and live
+StudioNet evidence must remain clearly separated.
 
 ## Case A — harmless chain
 
@@ -29,13 +34,34 @@ If the natural-language prompts are too ambiguous for validators to agree on `MA
 
 A source says "a draft invoice was created" and the destination trigger says "a payment was confirmed". `NO_MATCH` or `UNCERTAIN` must not activate the edge. In official Direct Mode, mock a leader falsely claiming `MATCH` while a validator independently classifies `NO_MATCH`. The validator must disagree so the transaction cannot mutate the adjacency.
 
-## Case E — controller and provenance protection
+## Case E — model-format recovery
+
+In official Direct Mode, return a malformed or oversized model result for a
+consented edge. `get_edge` must show `MODEL_ERROR=6`, no active adjacency and an
+incremented committed assessment count. Reassess the same edge with the same
+proposal hash and endpoint consents; a valid independently agreed `MATCH` may
+then proceed to deterministic graph admission. Three committed model errors
+become `RETRY_EXHAUSTED=7`. A validator-disagreement transaction aborts before
+the counter is committed, so it is not silently charged as an on-chain attempt.
+`UNCERTAIN=5` is a substantive terminal result, not a retryable format error.
+
+## Case F — controller and provenance protection
 
 - Network owner cannot impersonate a registered controller accepting its spec.
 - Controllers must consent to the exact edge proposal hash.
 - Unauthorized addresses cannot consume another controller's permit.
 - Graph seal prevents subsequent edge and node additions.
 - The public sealed hash identifies precisely the agreed semantic graph and its bounded budget.
+
+## Case G — sustainable capacity lifecycle
+
+Run identifiers and permit identifiers are monotonically increasing historical
+identifiers. `MAX_RUNS=1000` and `MAX_PERMITS=100000` are active per-network
+capacity limits. Closing a run releases its active run slot and outstanding
+permit slots but retains all historical records, so identifiers are never
+reused. Direct Mode exercises repeated close/start cycles and two independent
+networks; a live demonstration should exercise a representative cycle rather
+than issue thousands of unnecessary StudioNet transactions.
 
 ## Consumer boundary
 

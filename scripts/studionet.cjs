@@ -42,6 +42,17 @@ if (!normalized.includes(expectedAlias) || !normalized.includes(expectedRpc) ||
     !info.includes(expectedId) || normalized.includes('studio-dev') || info.includes('61997')) {
   fail(`Expected alias ${expectedAlias}, chain ${expectedId}, RPC ${expectedRpc}. Refusing operation.`);
 }
+let account;
+try { account = run(['account']); }
+catch (e) { fail('Unable to inspect the selected deployment account: ' + (e.stderr || e.message)); }
+const addressMatch = account.match(/address:\s*['"](0x[0-9a-fA-F]{40})['"]/);
+if (!addressMatch) fail('Selected account did not expose a valid public address.');
+const expectedAccount = process.env.GAINLOCK_DEPLOYER_ADDRESS;
+if (expectedAccount && addressMatch[1].toLowerCase() !== expectedAccount.toLowerCase()) {
+  fail(`Selected account ${addressMatch[1]} does not match GAINLOCK_DEPLOYER_ADDRESS.`);
+}
+console.log('Selected deployment account: ' + addressMatch[1]);
+console.log(account);
 async function verifyRpc() {
   const response = await fetch(expectedRpc, {
     method: 'POST',

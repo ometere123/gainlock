@@ -70,6 +70,43 @@ def test_uncertain_does_not_activate(direct_vm, direct_deploy, direct_owner,
     assert direct_vm.run_validator() is True
 
 
+def test_model_error_can_retry_to_match(direct_vm, direct_deploy, direct_owner,
+                                        direct_alice, direct_bob):
+    contract, network, edge = connected(direct_vm, direct_deploy,
+        direct_owner, direct_alice, direct_bob)
+    direct_vm.mock_llm(r"You are verifying ONE declared trigger relationship",
+        "not-json")
+    assert contract.assess_edge(edge) == 6
+    first = contract.get_edge(edge)
+    assert first["assessment_attempts"] == 1
+    assert first["source_ok"] and first["target_ok"]
+    direct_vm.clear_mocks()
+    direct_vm.mock_llm(r"You are verifying ONE declared trigger relationship",
+        json.dumps({"relation":"MATCH", "reason":"The frozen descriptions entail the trigger."}))
+    assert contract.assess_edge(edge) == 2
+    final = contract.get_edge(edge)
+    assert final["assessment_attempts"] == 2
+    assert final["relation"] == "MATCH"
+
+
+def test_model_error_retry_limit_is_terminal(direct_vm, direct_deploy,
+                                             direct_owner, direct_alice,
+                                             direct_bob):
+    contract, network, edge = connected(direct_vm, direct_deploy,
+        direct_owner, direct_alice, direct_bob)
+    direct_vm.mock_llm(r"You are verifying ONE declared trigger relationship",
+        "not-json")
+    assert contract.assess_edge(edge) == 6
+    assert contract.assess_edge(edge) == 6
+    assert contract.assess_edge(edge) == 7
+    final = contract.get_edge(edge)
+    assert final["assessment_attempts"] == 3
+    assert final["retry_exhausted"] is True
+    with direct_vm.expect_revert("assessment retry limit reached"):
+        contract.assess_edge(edge)
+    assert contract.get_graph_analysis(network)["max_total"] == 1
+
+
 def test_direct_unit_fanout_branching_cycle_denied(
         direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob, direct_charlie):
     """A->B, A->C, B->A, C->A; the last edge amplifies even though each fanout is one."""
@@ -112,6 +149,26 @@ def test_direct_wrong_controller_cannot_start_run(
     with direct_vm.prank(create_address("gainlock-bob")):
         with direct_vm.expect_revert("only root controller"):
             contract.start_run(network, node)
+
+
+def test_closed_run_releases_capacity_without_identifier_reuse(
+        direct_vm, direct_deploy, direct_owner, direct_alice):
+    contract, network, node = setup(direct_vm, direct_deploy, direct_owner,
+                                    direct_alice)
+    from gltest.direct import create_address
+    direct_alice = create_address("gainlock-alice")
+    contract.seal_network(network)
+    with direct_vm.prank(direct_alice):
+        first_run = contract.start_run(network, node)
+    first_permit = contract.get_run(first_run)["root_permit_id"]
+    with direct_vm.prank(direct_alice):
+        contract.close_run(first_run)
+        second_run = contract.start_run(network, node)
+    second_permit = contract.get_run(second_run)["root_permit_id"]
+    assert second_run != first_run
+    assert second_permit != first_permit
+    assert not contract.is_permit_spendable(first_permit, direct_alice)
+    assert contract.is_permit_spendable(second_permit, direct_alice)
 
 
 def test_direct_validator_detects_fabricated_semantic_match(
